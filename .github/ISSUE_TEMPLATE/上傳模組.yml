@@ -1,0 +1,25 @@
+name: 上傳模組
+description: 把自己寫的 iPLoT 模組放上工作坊。沒有人審查：上傳的東西誰都看得到、誰都能下載執行。
+title: "上傳："
+labels: [上傳]
+body:
+  - type: upload
+    id: zip
+    attributes:
+      label: 模組的 zip
+      description: '在 Finder 對著模組的資料夾按右鍵 →「壓縮」，把壓出來的 .zip 拖進來。一次一個模組。zip 裡的每個檔都會公開，包括 Finder 裡看不到的（按 ⌘⇧. 顯示）：`.venv`、`.history` 和模組自己存的資料。表單說檔案太大，多半是這些：先複製一份資料夾、拿掉它們再壓。'
+    validations:
+      required: true
+      accept: ".zip"
+  - type: textarea
+    id: notes
+    attributes:
+      label: 這一版改了什麼（選填）
+      description: 模組裡有 CHANGELOG.md 的話以它為準，這裡不用寫。
+  - type: checkboxes
+    id: agree
+    attributes:
+      label: 確認
+      options:
+        - label: 我知道上傳的東西誰都看得到、誰都能下載執行；收到之後，這個名字只有我的帳號能更新。
+          required: true
