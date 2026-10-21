@@ -201,3 +201,34 @@ def test_run_git_checks_the_exit_code(repo):
         receive.run_git(repo, "rev-parse", "--verify", "沒有這個")
     assert err.value.returncode != 0
     assert receive.run_git(repo, "rev-parse", "--verify", "沒有這個", check=False).returncode != 0
+
+
+def disk_full(*args, **kwargs):
+    raise OSError(28, "No space left on device")
+
+
+def write_in_with(repo, tmp_path):
+    unpacked = unpack(tmp_path, {"iplot.py": "x" * 1100})
+    reg, rec = load(repo)
+    receive.write_in(repo, unpacked, upload_for(unpacked), reg, rec, NOW)
+
+
+def test_place_oserror_is_not_writable(repo, tmp_path, monkeypatch):
+    monkeypatch.setattr(receive, "place", disk_full)
+    with pytest.raises(NotWritable):
+        write_in_with(repo, tmp_path)
+
+
+def test_write_json_oserror_is_not_writable(repo, tmp_path, monkeypatch):
+    monkeypatch.setattr(receive.registry, "write_json", disk_full)
+    with pytest.raises(NotWritable):
+        write_in_with(repo, tmp_path)
+
+
+def test_index_problems_decode_error_is_not_writable(repo, tmp_path, monkeypatch):
+    def undecodable(*args, **kwargs):
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+    monkeypatch.setattr(receive, "index_problems", undecodable)
+    with pytest.raises(NotWritable):
+        write_in_with(repo, tmp_path)

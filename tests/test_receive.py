@@ -172,6 +172,27 @@ def test_stuck_is_not_retried(repo, python310, tmp_path, monkeypatch):
     assert len(api.patches) == 1
 
 
+def test_disk_error_while_writing_in_says_not_writable(repo, python310, tmp_path, monkeypatch):
+    real_place = receive.place
+
+    def place(root, unpacked):
+        if unpacked.name == "一":
+            raise OSError(28, "No space left on device")
+        return real_place(root, unpacked)
+
+    monkeypatch.setattr(receive, "place", place)
+    api = FakeApi([up(1), up(2)])
+    zips = {att(1): module_zip(tmp_path, "一"), att(2): module_zip(tmp_path, "二")}
+    assert run(repo, api, zips, python310) == 0
+    assert api.comments[1] == [refuse("not_writable").text]
+    assert api.patches == [(1, REFUSED), (2, PUBLISHED)]
+    assert state(api, 1) == "closed"
+    assert "1" not in received(repo) and "2" in received(repo)
+    assert not (repo / "modules" / "一").exists()
+    assert not any("#1）" in s for s in subjects(repo))
+    assert git(repo, "status", "--porcelain") == ""
+
+
 def test_behind_stops_without_reply(repo, python310, tmp_path, monkeypatch):
     real = receive.push
     before = git(repo, "rev-parse", "HEAD").strip()

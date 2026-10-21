@@ -122,19 +122,25 @@ def index_problems(root: Path, name: str, files: Sequence[File], staged: Path) -
 def write_in(root: Path, unpacked: Unpacked, upload: Upload, registry_data: dict, received: dict,
              now: datetime) -> None:
     name = unpacked.name
-    place(root, unpacked)
-    registry.record(registry_data, name, upload.user_id, upload.login, upload.version, upload.notes, upload.issue,
-                    today=now.strftime("%Y-%m-%d"))
-    received[str(upload.issue)] = {"name": name, "version": upload.version, "owner_id": upload.user_id,
-                                   "at": now.strftime(registry.AT)}
-    registry.write_json(root / "registry.json", registry_data)
-    registry.write_json(root / "received.json", received)
+    try:
+        place(root, unpacked)
+        registry.record(registry_data, name, upload.user_id, upload.login, upload.version, upload.notes,
+                        upload.issue, today=now.strftime("%Y-%m-%d"))
+        received[str(upload.issue)] = {"name": name, "version": upload.version, "owner_id": upload.user_id,
+                                       "at": now.strftime(registry.AT)}
+        registry.write_json(root / "registry.json", registry_data)
+        registry.write_json(root / "received.json", received)
+    except OSError as exc:
+        raise NotWritable(str(exc)) from exc
     try:
         run_git(root, "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", "add", "-f", "--",
                 f"modules/{name}", "registry.json", "received.json")
     except GitFailed as exc:
         raise NotWritable(str(exc)) from exc
-    problems = index_problems(root, name, unpacked.files, unpacked.folder)
+    try:
+        problems = index_problems(root, name, unpacked.files, unpacked.folder)
+    except UnicodeDecodeError as exc:
+        raise NotWritable(str(exc)) from exc
     if problems:
         raise NotWritable("；".join(problems))
 
