@@ -4,10 +4,15 @@
 放進回覆時不能變成 @ 提及、#1 連結或 markdown。
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 from iplot_rules import BAD_NAME_TEXT
+
+MAX_REPLY = 20000  # 留言上限 GitHub 文件寫 65,536 字元；20000 在它以內，也比較好讀
+MAX_LISTED = 200
+MARK_RECEIVED = "<!-- iplot-modules:收到了 -->"
+MARK_RETRY = "<!-- iplot-modules:再試 -->"
 
 SAY: dict[str, str] = {
     "not_user": "只收一般帳號上傳的。",
@@ -90,3 +95,37 @@ def clip(text: str, limit: int) -> tuple[str, bool]:
 def refuse(key: str, **params: str | int) -> Refusal:
     shown = {k: str(v) if isinstance(v, int) else code(v) for k, v in params.items()}
     return Refusal(key, SAY[key].format(**shown))
+
+
+def received_reply(name: str, version: str, files: Sequence[str], skipped: Mapping[str, int],
+                   remarks: Sequence[str]) -> str:
+    """「收到了」那一則：公開的檔最多列 MAX_LISTED 條，整則超過 MAX_REPLY 就把列出的條數減到 100、50、20、0。"""
+    head = (f"收到了：「{code(name)}」{code(version)}，{len(files)} 個檔。"
+            "網站更新之後（通常幾分鐘）在 iPLoT 按「工作坊」就看得到；超過一小時還沒有，在這裡留言。")
+    tail: list[str] = []
+    if skipped:
+        tail.append("略過的檔（不公開，也不會裝到別人的電腦上）：\n" + block(f"{group} {n} 個" for group, n in skipped.items()))
+        if any(group.startswith(".git") for group in skipped):
+            tail.append("名字以 .git 開頭的檔與資料夾（.gitignore、.github…）一律不收：它們會讓 git 少收或改掉檔。")
+    if remarks:
+        tail.append("\n".join(f"- {remark}" for remark in remarks))
+    tail.append(MARK_RECEIVED)
+
+    reply = ""
+    for limit in (MAX_LISTED, 100, 50, 20, 0):
+        parts = [head]
+        if files:
+            lines = [f"{name}/{path}" for path in files[:limit]]
+            if len(files) > limit:
+                lines.append(f"還有 {len(files) - limit} 個")
+            parts.append("公開的檔（誰都看得到、下載得到）：\n" + block(lines))
+        reply = "\n\n".join(parts + tail)
+        if len(reply) <= MAX_REPLY:
+            break
+    return reply
+
+
+def short_reply(name: str, version: str, count: int | None) -> str:
+    """回覆送不出去時的短版。"""
+    shown = "" if count is None else f"，{count} 個檔"
+    return f"收到了：「{code(name)}」{code(version)}{shown}。\n{MARK_RECEIVED}"

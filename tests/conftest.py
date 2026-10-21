@@ -4,7 +4,10 @@ import importlib.util
 import stat
 import struct
 import sys
+import threading
 import zipfile
+from collections.abc import Callable
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -101,3 +104,72 @@ def big5_zip(path: Path, name: str = "整理桌面") -> Path:
     make_zip(path, {f"{placeholder.decode()}/iplot.py": "x" * 1100})
     path.write_bytes(path.read_bytes().replace(placeholder + b"/iplot.py", raw + b"/iplot.py"))
     return path
+
+
+DEFAULT_ATTACHMENT = "https://github.com/user-attachments/files/33695492/default.zip"
+
+
+def form_body(url: str | None = DEFAULT_ATTACHMENT, *, more_urls=(), notes: str = "_No response_",
+              agreed: bool = True) -> str:
+    """照 tests/fixtures/issue-body.md 的樣子組表單送出之後的內文：附件是一行 [原檔名](網址)，沒傳是 _No response_。"""
+    from gh import AGREE_TEXT
+
+    links = [f"[整理桌面.zip]({u})" for u in ([url] if url else []) + list(more_urls)]
+    box = "x" if agreed else " "
+    return (f"### 模組的 zip\n\n{chr(10).join(links) if links else '_No response_'}\n\n"
+            f"### 這一版改了什麼（選填）\n\n{notes}\n\n"
+            f"### 確認\n\n- [{box}] {AGREE_TEXT}")
+
+
+class Server:
+    """一台跑在 127.0.0.1 的小 HTTP 伺服器；host 只是網址裡寫的名字（第二台用 localhost）。"""
+
+    def __init__(self, routes: dict[str, Callable[[BaseHTTPRequestHandler], None]], host: str):
+        self.host = host
+        self.seen: list[tuple[str, dict[str, str]]] = []
+        seen = self.seen
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen.append((self.path, dict(self.headers)))
+                route = routes.get(self.path.split("?")[0])
+                try:
+                    if route is None:
+                        self.send_error(404)
+                    else:
+                        route(self)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass  # 下載的那一端先斷線了
+
+            def log_message(self, *args):
+                pass
+
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.httpd.daemon_threads = True
+        self.thread = threading.Thread(target=self.httpd.serve_forever, kwargs={"poll_interval": 0.05},
+                                       daemon=True)
+        self.thread.start()
+
+    def url(self, path: str = "/") -> str:
+        return f"http://{self.host}:{self.httpd.server_address[1]}{path}"
+
+    def close(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join()
+
+
+@pytest.fixture
+def http_server(monkeypatch):
+    """工廠 make(routes, host="127.0.0.1")：routes 是 {路徑: 收 handler 的函式}；測試結束全部關掉。"""
+    monkeypatch.setenv("no_proxy", "*")
+    monkeypatch.setenv("NO_PROXY", "*")
+    servers: list[Server] = []
+
+    def make(routes, host="127.0.0.1") -> Server:
+        servers.append(Server(routes, host))
+        return servers[-1]
+
+    yield make
+    for server in servers:
+        server.close()
