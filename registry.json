@@ -1,0 +1,59 @@
+{
+  "作業系統": {
+    "name": "作業系統",
+    "reserved": true
+  },
+  "更新": {
+    "name": "更新",
+    "reserved": true
+  },
+  "工作坊": {
+    "name": "工作坊",
+    "reserved": true
+  },
+  "開工": {
+    "name": "開工",
+    "owner_id": 71483597,
+    "owner": "william10310406"
+  },
+  "打開核心原始碼": {
+    "name": "打開核心原始碼",
+    "owner_id": 71483597,
+    "owner": "william10310406"
+  },
+  "開terminal": {
+    "name": "開Terminal",
+    "owner_id": 71483597,
+    "owner": "william10310406"
+  },
+  "重新啟動": {
+    "name": "重新啟動",
+    "owner_id": 71483597,
+    "owner": "william10310406"
+  },
+  "互通": {
+    "name": "互通",
+    "owner_id": 71483597,
+    "owner": "william10310406"
+  },
+  "主控面板": {
+    "name": "主控面板",
+    "owner_id": 71483597,
+    "owner": "william10310406"
+  },
+  "行事曆": {
+    "name": "行事曆",
+    "owner_id": 71483597,
+    "owner": "william10310406"
+  },
+  "科學計算": {
+    "name": "科學計算",
+    "owner_id": 71483597,
+    "owner": "william10310406"
+  },
+  "上傳": {
+    "name": "上傳",
+    "owner_id": 71483597,
+    "owner": "william10310406"
+  }
+}
