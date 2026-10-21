@@ -1,8 +1,10 @@
 """測試共用的東西：隔壁的 iPLoT clone、載入 iPLoT 的檔、把開發者自己的 git 設定隔開。"""
 
 import importlib.util
+import os
 import stat
 import struct
+import subprocess
 import sys
 import threading
 import zipfile
@@ -173,3 +175,43 @@ def http_server(monkeypatch):
     yield make
     for server in servers:
         server.close()
+
+
+TEST_ID = ("-c", "user.name=測試", "-c", "user.email=t@example.invalid")
+
+
+def git(cwd: Path, *args: str) -> str:
+    """測試裡跑 git（只在暫存資料夾裡）；結束碼不是 0 就丟例外，回 stdout。"""
+    done = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8",
+                          check=True, env={**os.environ, "LC_ALL": "C"})
+    return done.stdout
+
+
+@pytest.fixture
+def repo(tmp_path) -> Path:
+    """tmp/origin.git（bare）＋ clone 成 tmp/work；work 已經 commit、push 一次。回 work。"""
+    origin, work = tmp_path / "origin.git", tmp_path / "work"
+    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    git(tmp_path, "clone", "-q", str(origin), str(work))
+    git(work, "symbolic-ref", "HEAD", "refs/heads/main")
+    git(work, "config", "core.ignorecase", "false")
+    (work / "registry.json").write_text("{}\n", encoding="utf-8")
+    (work / "received.json").write_text("{}\n", encoding="utf-8")
+    (work / "notice.txt").write_text("歡迎\n", encoding="utf-8")
+    (work / ".gitignore").write_text("*.log\n", encoding="utf-8")
+    git(work, "add", "-A")
+    git(work, *TEST_ID, "commit", "-q", "-m", "種子")
+    git(work, "push", "-q", "origin", "HEAD:main")
+    return work
+
+
+def push_from_elsewhere(repo: Path, change: Callable[[Path], None]) -> None:
+    """另外 clone 一份、做 change、commit、push：模擬研究助理剛好 push。"""
+    other = repo.parent / "elsewhere"
+    while other.exists():
+        other = other.with_name(other.name + "x")
+    git(repo.parent, "clone", "-q", str(repo.parent / "origin.git"), str(other))
+    change(other)
+    git(other, "add", "-A")
+    git(other, *TEST_ID, "commit", "-q", "-m", "別處的 commit")
+    git(other, "push", "-q", "origin", "HEAD:main")
