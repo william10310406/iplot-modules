@@ -1,7 +1,11 @@
 """測試共用的東西：隔壁的 iPLoT clone、載入 iPLoT 的檔、把開發者自己的 git 設定隔開。"""
 
+import copy
+import hashlib
 import importlib.util
 import os
+import re
+import shutil
 import stat
 import struct
 import subprocess
@@ -215,3 +219,117 @@ def push_from_elsewhere(repo: Path, change: Callable[[Path], None]) -> None:
     git(other, "add", "-A")
     git(other, *TEST_ID, "commit", "-q", "-m", "別處的 commit")
     git(other, "push", "-q", "origin", "HEAD:main")
+
+
+class FakeApi:
+    """gh.Api 的替身：一樣的 get/post/patch、writes；照路徑回資料，不連網。
+    fail 的鍵是 "comment"、"patch"、"user"：碰到就依序丟出清單裡的例外（丟出去的那一次不留下東西）。"""
+
+    def __init__(self, issues=(), labels=(), comments=None, users=None, fail=None, repo="iplot/iplot-modules"):
+        self.repo = repo
+        self.issues: list[dict] = [copy.deepcopy(i) for i in issues]
+        self.labels: set[str] = set(labels)
+        self.comments: dict[int, list[str]] = {n: list(c) for n, c in (comments or {}).items()}
+        self.patches: list[tuple[int, dict]] = []
+        self.users: dict[int, str | BaseException] = dict(users or {})
+        self.fail: dict[str, list[BaseException]] = {k: list(v) for k, v in (fail or {}).items()}
+        self.requests: list[tuple[str, str]] = []
+        self.writes = 0
+
+    def _maybe_fail(self, kind: str) -> None:
+        if self.fail.get(kind):
+            raise self.fail[kind].pop(0)
+
+    def _issue(self, number: int) -> dict:
+        return next(i for i in self.issues if i["number"] == number)
+
+    def get(self, path: str, params: dict | None = None):
+        from gh import NotFound
+
+        self.requests.append(("GET", path))
+        params = params or {}
+        base = f"/repos/{self.repo}"
+        if path == f"{base}/labels":
+            return [{"name": name} for name in sorted(self.labels)]
+        if path == f"{base}/issues":
+            state, label = params.get("state", "open"), params.get("labels")
+            found = [i for i in self.issues if i.get("state", "open") == state
+                     and (label is None or label in {lb["name"] for lb in i.get("labels", [])})]
+            return copy.deepcopy(found)
+        if m := re.fullmatch(re.escape(base) + r"/issues/(\d+)/comments", path):
+            return [{"body": body} for body in self.comments.get(int(m.group(1)), [])]
+        if m := re.fullmatch(r"/user/(\d+)", path):
+            self._maybe_fail("user")
+            login = self.users.get(int(m.group(1)))
+            if isinstance(login, BaseException):
+                raise login
+            if login is None:
+                raise NotFound(404, "Not Found")
+            return {"login": login, "id": int(m.group(1))}
+        raise NotFound(404, path)
+
+    def post(self, path: str, body: dict):
+        from gh import NotFound
+
+        self.requests.append(("POST", path))
+        self.writes += 1
+        base = f"/repos/{self.repo}"
+        if path == f"{base}/labels":
+            self.labels.add(body["name"])
+            return dict(body)
+        if m := re.fullmatch(re.escape(base) + r"/issues/(\d+)/comments", path):
+            self._maybe_fail("comment")
+            self.comments.setdefault(int(m.group(1)), []).append(body["body"])
+            return {"body": body["body"]}
+        raise NotFound(404, path)
+
+    def patch(self, path: str, body: dict):
+        from gh import NotFound
+
+        self.requests.append(("PATCH", path))
+        self.writes += 1
+        if m := re.fullmatch(re.escape(f"/repos/{self.repo}") + r"/issues/(\d+)", path):
+            self._maybe_fail("patch")
+            number = int(m.group(1))
+            self.patches.append((number, copy.deepcopy(body)))
+            target = self._issue(number)
+            if "labels" in body:
+                target["labels"] = [{"name": name} for name in body["labels"]]
+            if "state" in body:
+                target["state"] = body["state"]
+            return copy.deepcopy(target)
+        raise NotFound(404, path)
+
+
+def issue(number: int, *, login="someone", user_id=222, type="User", body=None, labels=("上傳",)) -> dict:
+    """API 回的一筆 issue（只有機器人用到的欄位）；body 預設 form_body()。"""
+    return {"number": number, "state": "open", "user": {"login": login, "id": user_id, "type": type},
+            "body": form_body() if body is None else body, "labels": [{"name": name} for name in labels]}
+
+
+def fake_fetch(zips: dict[str, Path]):
+    """跟 gh.fetch 同簽名：把網址對應的 zip 複製到 dest、回 sha256；網址不在就 DownloadError("HTTP 404")。
+    叫過的網址記在回傳函式的 calls。"""
+    from gh import DownloadError
+
+    def fetch(url: str, dest: Path, **_kwargs) -> str:
+        fetch.calls.append(url)
+        if url not in zips:
+            raise DownloadError("HTTP 404")
+        shutil.copyfile(zips[url], dest)
+        return hashlib.sha256(dest.read_bytes()).hexdigest()
+
+    fetch.calls = []
+    return fetch
+
+
+@pytest.fixture
+def python310(monkeypatch) -> str:
+    """有 python3.10 就給它；沒有就讓 source.syntax_310 一律說可以，給一個假的路徑。"""
+    found = shutil.which("python3.10")
+    if found:
+        return found
+    import source
+
+    monkeypatch.setattr(source, "syntax_310", lambda *args, **kwargs: None)
+    return "/fake/python3.10"
