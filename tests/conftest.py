@@ -1,12 +1,16 @@
 """測試共用的東西：隔壁的 iPLoT clone、載入 iPLoT 的檔、把開發者自己的 git 設定隔開。"""
 
 import importlib.util
+import stat
+import struct
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
 
 IPLOT = Path(__file__).resolve().parents[2] / "iplot"
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
@@ -47,3 +51,53 @@ def isolated_git(tmp_path, monkeypatch):
     config.write_text("", encoding="utf-8")
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+
+def make_zip(path: Path, entries: dict[str, bytes | str | None], *, symlinks: dict[str, str] | None = None,
+             method: int = zipfile.ZIP_DEFLATED) -> Path:
+    """用 zipfile 造 zip；值是 None 的是目錄條目（名字結尾 /）。
+    注意：這樣造的非 ASCII 檔名會自動標 UTF-8（0x800），跟 Finder 壓的不一樣；要 Finder 那種用 tests/fixtures。"""
+    with zipfile.ZipFile(path, "w", compression=method) as z:
+        for name, data in entries.items():
+            if data is None:
+                z.writestr(name if name.endswith("/") else name + "/", b"")
+            else:
+                z.writestr(name, data)
+        for name, target in (symlinks or {}).items():
+            info = zipfile.ZipInfo(name)
+            info.external_attr = (stat.S_IFLNK | 0o755) << 16
+            z.writestr(info, target)
+    return path
+
+
+def patch_zip(path: Path, *, encrypted: bool = False, method: int | None = None, size_delta: int = 0,
+              first_data_byte: int | None = None) -> Path:
+    """只改第一條的位元組，造出壞 zip。偏移：本地檔頭 6（旗標）、8（壓縮法）、22（原始大小）；
+    中央目錄 8、10、24；資料從本地偏移 30 + 檔名長 + extra 長 開始。size_delta 兩處一起加。"""
+    data = bytearray(path.read_bytes())
+    eocd = data.rfind(b"PK\x05\x06")
+    cd = struct.unpack_from("<I", data, eocd + 16)[0]
+    assert data[0:4] == b"PK\x03\x04" and data[cd:cd + 4] == b"PK\x01\x02"
+    for base, flag, comp, size in ((0, 6, 8, 22), (cd, 8, 10, 24)):
+        if encrypted:
+            data[base + flag] |= 1
+        if method is not None:
+            struct.pack_into("<H", data, base + comp, method)
+        if size_delta:
+            old = struct.unpack_from("<I", data, base + size)[0]
+            struct.pack_into("<I", data, base + size, old + size_delta)
+    if first_data_byte is not None:
+        name_len, extra_len = struct.unpack_from("<HH", data, 26)
+        data[30 + name_len + extra_len] = first_data_byte
+    path.write_bytes(bytes(data))
+    return path
+
+
+def big5_zip(path: Path, name: str = "整理桌面") -> Path:
+    """檔名是 Big5、沒標 UTF-8 旗標的 zip：zipfile 寫非 ASCII 一律標 UTF-8，
+    所以先寫同長度的 ASCII 名字，再把位元組換成 Big5。"""
+    raw = name.encode("big5")
+    placeholder = b"Q" * len(raw)
+    make_zip(path, {f"{placeholder.decode()}/iplot.py": "x" * 1100})
+    path.write_bytes(path.read_bytes().replace(placeholder + b"/iplot.py", raw + b"/iplot.py"))
+    return path
