@@ -122,3 +122,59 @@ def test_short_reply():
     assert "`@x`" in reply and "3 個檔" in reply and reply.endswith(say.MARK_RECEIVED)
     assert "個檔" not in say.short_reply("@x", "1.0.0", None)
     assert "@" not in outside_code(reply)
+
+
+def test_code_never_contains_a_line_break():
+    shown = say.code("a\n\n@octocat [x](https://evil.example) #1\n\nb")
+    assert "\n" not in shown
+    assert "\\n" in shown
+    bare = outside_code(shown)
+    assert "@" not in bare
+    assert "#1" not in bare
+    for ch, esc in (("\r", "\\r"), ("\u2028", "\\u2028"), ("\u2029", "\\u2029"), ("\x85", "\\x85"),
+                    ("\x00", "\\x00"), ("\u200b", "\\u200b"), ("\t", "\\t")):
+        out = say.code(f"a{ch}b")
+        assert ch not in out
+        assert esc in out
+    assert "\\U000e0041" in say.code("a\U000e0041b")  # Cf，超過 U+FFFF
+    assert say.code("a b") == "a b".join("``")  # 一般空白不動
+
+
+def test_code_is_clipped():
+    inner = say.code("a" * 10_000).strip("`")
+    assert len(inner) == say.MAX_CODE
+    assert inner.endswith("…")
+    assert say.code("a" * say.MAX_CODE) == "`" + "a" * say.MAX_CODE + "`"
+
+
+def test_code_escapes_lone_surrogates():
+    for ch, esc in (("\ud800", "\\ud800"), ("\udfff", "\\udfff")):
+        out = say.code(f"a{ch}b")
+        assert ch not in out
+        assert esc in out
+        out.encode("utf-8")  # 落單的代理字元編不成 UTF-8：留言送不出去
+
+
+def test_code_fence_is_counted_after_clipping():
+    shown = say.code("`" * 10_000)
+    assert len(shown) <= 3 * say.MAX_CODE + 2
+    assert max(len(run) for run in re.findall("`+", shown)) <= say.MAX_CODE + 1
+    for text in ("\n" * 1000, "\U000e0041" * 1000):  # 先跳脫再截
+        assert len(say.code(text).strip("`")) == say.MAX_CODE
+
+
+def test_every_refusal_with_parameters_stays_on_one_line():
+    import string
+    nasty = "a\n\n@octocat [x](https://evil.example)\n\n" * 5000
+    checked = 0
+    for key, sentence in say.SAY.items():
+        names = [f for _, f, _, _ in string.Formatter().parse(sentence) if f]
+        if not names:
+            continue
+        params = {n: 3 if n in ("n", "line") else nasty for n in names}
+        text = say.refuse(key, **params).text
+        assert text.count("\n") == 0, key  # 不用 in：失敗時 pytest 會對兩萬多行做 diff，跑好幾分鐘
+        assert outside_code(text).count("@") == 0, key
+        assert len(text) <= len(sentence) + len(names) * (say.MAX_CODE + 10), key
+        checked += 1
+    assert checked > 10

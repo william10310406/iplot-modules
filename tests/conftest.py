@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -223,6 +224,7 @@ def push_from_elsewhere(repo: Path, change: Callable[[Path], None]) -> None:
 
 class FakeApi:
     """gh.Api 的替身：一樣的 get/post/patch、writes；照路徑回資料，不連網。
+    post、patch 先照 gh.Api._request 把 body 編成 UTF-8 的 JSON：送不出去的字（例如落單的代理字元）在這裡就丟例外。
     fail 的鍵是 "comment"、"patch"、"user"：碰到就依序丟出清單裡的例外（丟出去的那一次不留下東西）。"""
 
     def __init__(self, issues=(), labels=(), comments=None, users=None, fail=None, repo="iplot/iplot-modules"):
@@ -235,6 +237,10 @@ class FakeApi:
         self.fail: dict[str, list[BaseException]] = {k: list(v) for k, v in (fail or {}).items()}
         self.requests: list[tuple[str, str]] = []
         self.writes = 0
+
+    @staticmethod
+    def _encode(body: dict) -> None:
+        json.dumps(body, ensure_ascii=False).encode("utf-8")  # 跟 gh.Api._request 一樣
 
     def _maybe_fail(self, kind: str) -> None:
         if self.fail.get(kind):
@@ -271,6 +277,7 @@ class FakeApi:
     def post(self, path: str, body: dict):
         from gh import NotFound
 
+        self._encode(body)
         self.requests.append(("POST", path))
         self.writes += 1
         base = f"/repos/{self.repo}"
@@ -286,6 +293,7 @@ class FakeApi:
     def patch(self, path: str, body: dict):
         from gh import NotFound
 
+        self._encode(body)
         self.requests.append(("PATCH", path))
         self.writes += 1
         if m := re.fullmatch(re.escape(f"/repos/{self.repo}") + r"/issues/(\d+)", path):

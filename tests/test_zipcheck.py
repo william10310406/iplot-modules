@@ -6,7 +6,7 @@ import zlib
 import pytest
 import zipcheck
 from conftest import FIXTURES, big5_zip, make_zip, patch_zip
-from say import Refusal
+from say import Refusal, code
 
 IPLOT_PY = "x" * 1100  # 第一條一律 m/iplot.py、至少 1 KB（patch_zip 只改第一條）
 
@@ -135,7 +135,8 @@ def test_bad_paths_are_refused(tmp_path, bad):
     result = zipcheck.inspect(path, tmp_path / "staging")
     assert isinstance(result, Refusal)
     assert result.key == "bad_path"
-    assert f"`{bad}`" in result.text
+    assert code(bad) in result.text
+    assert not any(unicodedata.category(c) == "Cc" for c in result.text)
 
 
 @pytest.mark.parametrize("pair", [("m/a", "m/a/b"), ("m/a/", "m/a"), ("m/A/x", "m/a/y"), ("m/x", "m/X"),

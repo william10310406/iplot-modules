@@ -4,6 +4,7 @@
 放進回覆時不能變成 @ 提及、#1 連結或 markdown。
 """
 
+import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
@@ -11,6 +12,7 @@ from iplot_rules import BAD_NAME_TEXT
 
 MAX_REPLY = 20000  # 留言上限 GitHub 文件寫 65,536 字元；20000 在它以內，也比較好讀
 MAX_LISTED = 200
+MAX_CODE = 500  # 一段行內程式碼最多幾個字；跟 receive.MAX_REASON 一樣，push 被擋的原因不會被截得更短
 MARK_RECEIVED = "<!-- iplot-modules:收到了 -->"
 MARK_RETRY = "<!-- iplot-modules:再試 -->"
 
@@ -72,8 +74,27 @@ def _longest_run(text: str) -> int:
     return longest
 
 
+def _one_line(text: str) -> str:
+    """控制字元（Cc、Cf、Zl、Zp）與落單的代理字元（Cs）換成看得見的跳脫寫法，讓字一定只有一行、一定編得成 UTF-8。"""
+    out = []
+    for ch in text:
+        if unicodedata.category(ch) not in ("Cc", "Cf", "Zl", "Zp", "Cs"):
+            out.append(ch)
+        elif ch in "\n\r\t":
+            out.append({"\n": "\\n", "\r": "\\r", "\t": "\\t"}[ch])
+        elif ord(ch) < 0x100:
+            out.append(f"\\x{ord(ch):02x}")
+        elif ord(ch) <= 0xFFFF:
+            out.append(f"\\u{ord(ch):04x}")
+        else:
+            out.append(f"\\U{ord(ch):08x}")
+    return "".join(out)
+
+
 def code(text: str) -> str:
-    """行內程式碼：反引號的數目比內容裡最長的一串多一個；開頭或結尾是反引號、或頭尾都是空白時兩邊補一個空白。"""
+    """行內程式碼：先把控制字元寫成跳脫、最多 MAX_CODE 個字，然後反引號的數目比內容裡最長的一串多一個；開頭或結尾是反引號、或頭尾都是空白時兩邊補一個空白。"""
+    text = text[: MAX_CODE + 1]  # 跳脫只會讓字變長：再後面的字一定會被截掉，先切掉結果一字不差
+    text = clip(_one_line(text), MAX_CODE)[0]
     fence = "`" * (_longest_run(text) + 1)
     pad = text.startswith("`") or text.endswith("`") or (bool(text) and text[0].isspace() and text[-1].isspace())
     return f"{fence} {text} {fence}" if pad else f"{fence}{text}{fence}"

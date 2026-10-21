@@ -381,6 +381,16 @@ def test_iplot_errors_do_not_block_the_next(repo, src, key, python310, tmp_path)
     assert api.patches == [(1, REFUSED), (2, PUBLISHED)]
 
 
+def test_lone_surrogate_title_is_refused_and_does_not_block_the_next(repo, python310, tmp_path):
+    src = '"""說明"""\nTITLE = "\\ud800 "\n'  # 檔裡是 ASCII 的反斜線跳脫：解析出來的 TITLE 有落單的代理字元
+    api = FakeApi([up(1), up(2)])
+    zips = {att(1): module_zip(tmp_path, "壞", src), att(2): module_zip(tmp_path, "好")}
+    assert run(repo, api, zips, python310) == 0
+    assert api.comments[1] == [refuse("title_taken", title="\ud800 ").text]
+    assert api.patches == [(1, REFUSED), (2, PUBLISHED)]
+    assert sorted(p.name for p in (repo / "modules").iterdir()) == ["好"]
+
+
 def test_missing_python310_stops_before_touching_any_issue(repo, monkeypatch):
     monkeypatch.setattr(source, "find_python310", lambda: None)
     api = FakeApi([up(1)])
