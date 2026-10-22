@@ -193,6 +193,16 @@ def test_lone_surrogate_is_refused(tmp_path, src):
     assert result.text == SAY["surrogate"]
 
 
+@needs310
+def test_python310_syntax_is_reported_before_a_lone_surrogate(tmp_path):
+    """兩樣都有：先說 3.10 的語法（行號、訊息），代理字元那一道排在它後面。"""
+    folder = put(tmp_path, 'ICON = "\\ud800"\ntype X = int\n')  # 檔裡是 ASCII 的反斜線跳脫；第 2 行 3.12 收、3.10 不收
+    assert b'"\\ud800"' in (folder / "iplot.py").read_bytes()
+    result = check(folder, python=shutil.which("python3.10"), run=subprocess.run)
+    assert isinstance(result, Refusal) and result.key == "syntax_310"
+    assert "第 2 行" in result.text
+
+
 def test_emoji_icon_is_not_a_lone_surrogate(tmp_path):
     result = check(put(tmp_path, 'ICON = "\U0001F600"\n'))  # 檔裡是真的表情符號（四個位元組的 UTF-8）
     assert isinstance(result, Source) and result.icon == "\U0001F600"
