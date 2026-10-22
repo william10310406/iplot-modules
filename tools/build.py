@@ -138,25 +138,37 @@ def author_of(api, entry: dict, cache: dict[int, str]) -> str:
 
 
 def make_entry(entry: dict, root: Path, out: Path, base_url: str, api, cache) -> dict:
-    """打這一筆的 zip，回 index.json 的那一筆。iplot.py 讀不了丟 ValueError。"""
+    """打這一筆的 zip，回 index.json 的那一筆。iplot.py 讀不了、要寫進 index.json 的字編不成 UTF-8（落單的代理字元）
+    丟 ValueError；兩樣都在打 zip 之前查，跳過的那一筆不留 zip。"""
     name = entry["name"]
     folder = root / "modules" / name
     meta = read_meta(folder / "iplot.py")
     if meta.error is not None:
         raise ValueError(f"iplot.py 讀不了：{meta.error}")
+    description = clip(meta.description, MAX_DESCRIPTION)[0]
+    icon = clip(meta.icon or "", MAX_ICON)[0]
+    notes = entry.get("notes", "")
+    author = author_of(api, entry, cache)
+    warning = entry.get("warning")
+    if not (isinstance(warning, str) and warning):
+        warning = None
+    shown = [name, entry["version"], description, icon, notes, author, warning]
+    try:
+        json.dumps(shown, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError:
+        raise ValueError("有不成對的代理字元，不能寫進 index.json") from None
     zip_path = pack(folder, name, out / MODULES)
     result = {
         "name": name,
         "version": entry["version"],
         "zip_url": url(base_url, MODULES, f"{name}.zip"),
         "sha256": hashlib.sha256(zip_path.read_bytes()).hexdigest(),
-        "description": clip(meta.description, MAX_DESCRIPTION)[0],
-        "icon": clip(meta.icon or "", MAX_ICON)[0],
-        "notes": entry.get("notes", ""),
-        "author": author_of(api, entry, cache),
+        "description": description,
+        "icon": icon,
+        "notes": notes,
+        "author": author,
     }
-    warning = entry.get("warning")
-    if isinstance(warning, str) and warning:
+    if warning is not None:
         result["warning"] = warning
     return result
 

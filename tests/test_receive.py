@@ -386,9 +386,20 @@ def test_lone_surrogate_title_is_refused_and_does_not_block_the_next(repo, pytho
     api = FakeApi([up(1), up(2)])
     zips = {att(1): module_zip(tmp_path, "壞", src), att(2): module_zip(tmp_path, "好")}
     assert run(repo, api, zips, python310) == 0
-    assert api.comments[1] == [refuse("title_taken", title="\ud800 ").text]
+    assert api.comments[1] == [SAY["surrogate"]]  # 代理字元那一道在 TITLE 的檢查之前
     assert api.patches == [(1, REFUSED), (2, PUBLISHED)]
     assert sorted(p.name for p in (repo / "modules").iterdir()) == ["好"]
+
+
+def test_lone_surrogate_icon_is_refused_and_does_not_block_the_next(repo, python310, tmp_path):
+    src = '"""說明"""\nICON = "\\ud800"\n'  # 檔裡是 ASCII 的反斜線跳脫：解析出來的 ICON 有落單的代理字元
+    api = FakeApi([up(1), up(2)])
+    zips = {att(1): module_zip(tmp_path, "壞", src), att(2): module_zip(tmp_path, "好")}
+    assert run(repo, api, zips, python310) == 0
+    assert api.patches == [(1, REFUSED), (2, PUBLISHED)]
+    assert api.comments[1] == [SAY["surrogate"]]
+    assert sorted(p.name for p in (repo / "modules").iterdir()) == ["好"]
+    assert "1" not in received(repo) and "2" in received(repo)
 
 
 def test_missing_python310_stops_before_touching_any_issue(repo, monkeypatch):

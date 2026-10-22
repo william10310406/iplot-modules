@@ -195,6 +195,28 @@ def test_one_bad_entry_is_skipped_and_the_others_published(tmp_path, monkeypatch
     assert "跳過「整理桌面」" not in written
 
 
+@pytest.mark.parametrize("where", ["icon", "notes"])
+def test_lone_surrogate_entry_is_skipped_and_the_others_published(tmp_path, monkeypatch, where):
+    """機器人還沒擋代理字元時放進來的那一筆：只跳過它，index.json 照樣寫得出來，其他照發。"""
+    bad_iplot = '"""說明"""\nICON = "\\ud800"\n' if where == "icon" else IPLOT_PY  # 檔裡是 ASCII 的反斜線跳脫
+    bad = entry("壞", notes="\ud800" if where == "notes" else "第一版")
+    root = make_repo(tmp_path, modules={"壞": {"iplot.py": bad_iplot}, "好": {"iplot.py": IPLOT_PY}})
+    data = {registry.key(e["name"]): e for e in (bad, entry("好"))}
+    (root / "registry.json").write_text(json.dumps(data, indent=2) + "\n", encoding="ascii")  # 代理字元只能寫成 \ud800
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    site = tmp_path / "site"
+    assert run(root, site) == 0
+    assert [u["name"] for u in index_of(site)["uploads"]] == ["好"]
+    lines = summary.read_text(encoding="utf-8").splitlines()
+    skipped = [line for line in lines if line.startswith("跳過「壞」")]
+    assert skipped == ["跳過「壞」：有不成對的代理字元，不能寫進 index.json"]
+    assert not (site / "模組" / "壞.zip").exists()
+    assert (site / "模組" / "好.zip").is_file()
+    (site / "index.json").read_bytes().decode("utf-8")
+    (site / "index.html").read_bytes().decode("utf-8")
+
+
 def test_unregistered_folder_is_not_published(tmp_path):
     site, index = built(tmp_path, [entry("整理桌面")],
                         {"整理桌面": {"iplot.py": IPLOT_PY}, "沒登記": {"iplot.py": IPLOT_PY}})

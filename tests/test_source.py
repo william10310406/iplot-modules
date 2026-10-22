@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import source
 from registry import key
-from say import Refusal, code
+from say import SAY, Refusal, code
 from source import (
     MAX_DESCRIPTION,
     MAX_ICON,
@@ -180,6 +180,22 @@ def test_title_too_similar_to_someone_elses_is_refused(tmp_path):
 def test_title_with_invisible_characters_is_refused(tmp_path):
     result = check(put(tmp_path, 'TITLE = "開工\\u200b"\n'))
     assert isinstance(result, Refusal) and result.key == "title_taken"
+
+
+@pytest.mark.parametrize("src", ['"""\\ud800 說明"""\n', 'ICON = "\\ud800"\n', 'TITLE = "\\ud800"\n',
+                                 'TITLE = "\\udfff"\n'], ids=["description", "icon", "title", "title_low"])
+def test_lone_surrogate_is_refused(tmp_path, src):
+    """檔裡是 ASCII 的反斜線跳脫：解析出來的字串有落單的代理字元，編不成 UTF-8，index.json 寫不出來。"""
+    folder = put(tmp_path, src)
+    assert b"\\ud" in (folder / "iplot.py").read_bytes()  # 檔裡沒有代理字元本身（那根本編不成 UTF-8）
+    result = check(folder)
+    assert isinstance(result, Refusal) and result.key == "surrogate"
+    assert result.text == SAY["surrogate"]
+
+
+def test_emoji_icon_is_not_a_lone_surrogate(tmp_path):
+    result = check(put(tmp_path, 'ICON = "\U0001F600"\n'))  # 檔裡是真的表情符號（四個位元組的 UTF-8）
+    assert isinstance(result, Source) and result.icon == "\U0001F600"
 
 
 def test_find_python310_uses_which(monkeypatch):

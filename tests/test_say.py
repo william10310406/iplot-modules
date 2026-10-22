@@ -7,8 +7,8 @@ ROW_KEYS = {
     "not_user", "gone", "no_zip", "many_zips", "not_agreed", "download", "too_big", "not_zip", "broken", "shape",
     "bad_path", "names_not_utf8", "too_large", "too_many_files", "too_many_entries", "bad_name", "invisible",
     "similar", "reserved", "removed", "taken", "title_taken", "case", "too_many_uploads", "too_many_names", "full",
-    "syntax", "syntax_310", "not_utf8", "too_complex", "changelog", "not_newer", "blocked", "retry", "stuck",
-    "iplot_big", "bad_version", "not_writable", "held",
+    "syntax", "syntax_310", "not_utf8", "too_complex", "surrogate", "changelog", "not_newer", "blocked", "retry",
+    "stuck", "iplot_big", "bad_version", "not_writable", "held",
 }
 
 
@@ -65,6 +65,11 @@ def test_say_has_every_row_of_section_10():
     assert say.SAY["bad_path"] == ("zip 裡有不能用的路徑：{path}（..、絕對路徑、反斜線、控制字元、Windows 不能用的字元與保留字、"
                                    "結尾是 . 或空白、空的一段、重複或只差大小寫、檔跟資料夾同名）。")
     assert say.SAY["full"] == "工作坊的空間快滿了，研究助理處理中；暫時不收新的名字。"
+
+
+def test_surrogate_sentence_shows_the_escape_not_the_character():
+    assert say.SAY["surrogate"] == "iplot.py 的說明、ICON 或 TITLE 裡有不成對的 \\ud800 這類字：拿掉再傳。"
+    say.SAY["surrogate"].encode("utf-8")  # 句子裡是反斜線加 ud800 六個字，不是代理字元本身
 
 
 def test_refuse_int_params_are_plain():

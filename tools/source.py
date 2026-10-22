@@ -1,4 +1,4 @@
-"""上傳的 iplot.py 的檢查：長度、read_meta 的三種錯、Python 3.10 的語法、TITLE。
+"""上傳的 iplot.py 的檢查：長度、read_meta 的三種錯、Python 3.10 的語法、落單的代理字元、TITLE。
 
 上傳的東西只讀不執行：這裡沒有 import、exec、eval、compile 上傳的檔。3.10 那一道只 ast.parse，
 原始碼走 stdin、argv 是清單、帶 -I。
@@ -8,6 +8,7 @@ import json
 import re
 import shutil
 import subprocess
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -71,6 +72,11 @@ def syntax_310(source: bytes, python: str, run=subprocess.run) -> tuple[int, str
     raise TooComplex
 
 
+def has_lone_surrogate(text: str) -> bool:
+    """有沒有落單的代理字元（類別 Cs）：iplot.py 裡寫 "\\ud800" 這種跳脫，解析出來就是一個，編不成 UTF-8。"""
+    return any(unicodedata.category(ch) == "Cs" for ch in text)
+
+
 def title_refusal(title: str | None, name: str, uploader_id: int, registry: dict) -> Refusal | None:
     if title is None or key(title) == key(name):
         return None
@@ -99,6 +105,8 @@ def check_source(folder: Path, name: str, uploader_id: int, registry: dict, pyth
         return refuse("too_complex")
     if bad:
         return refuse("syntax_310", line=bad[0], message=bad[1])
+    if any(has_lone_surrogate(text) for text in (meta.title or "", meta.description, meta.icon or "")):
+        return refuse("surrogate")
     if refusal := title_refusal(meta.title, name, uploader_id, registry):
         return refusal
     remarks = []

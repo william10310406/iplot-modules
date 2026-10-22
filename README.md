@@ -78,6 +78,7 @@ iPLoT 核心的更新不在這裡。核心在 `iplot-workshop`，上傳碰不到
 | 只有 3.10 報錯的語法 | iplot.py 第 〈line〉 行：〈message〉。iPLoT 要能在 Python 3.10 跑。 |
 | iplot.py 不是 UTF-8 | iplot.py 不是 UTF-8：用 UTF-8 存檔再傳。 |
 | iplot.py 解析不了 | iplot.py 解析不了（太複雜）。 |
+| 說明、ICON、TITLE 有不成對的代理字元 | iplot.py 的說明、ICON 或 TITLE 裡有不成對的 \ud800 這類字：拿掉再傳。 |
 | CHANGELOG 讀不出 | CHANGELOG.md 讀不出最上面那一版：〈reason〉。 |
 | 版本沒有比較新 | CHANGELOG.md 最上面那一節的版本 〈v〉 不比現在的 〈cur〉 新：把版本號加大再傳。 |
 | push 被擋 | 推不上去（〈reason〉）：多半是檔案裡有密碼或金鑰，拿掉再傳。 |

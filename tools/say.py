@@ -48,6 +48,7 @@ SAY: dict[str, str] = {
     "syntax_310": "iplot.py 第 {line} 行：{message}。iPLoT 要能在 Python 3.10 跑。",
     "not_utf8": "iplot.py 不是 UTF-8：用 UTF-8 存檔再傳。",
     "too_complex": "iplot.py 解析不了（太複雜）。",
+    "surrogate": "iplot.py 的說明、ICON 或 TITLE 裡有不成對的 \\ud800 這類字：拿掉再傳。",
     "changelog": "CHANGELOG.md 讀不出最上面那一版：{reason}。",
     "not_newer": "CHANGELOG.md 最上面那一節的版本 {v} 不比現在的 {cur} 新：把版本號加大再傳。",
     "blocked": "推不上去（{reason}）：多半是檔案裡有密碼或金鑰，拿掉再傳。",
