@@ -1,0 +1,249 @@
+<!doctype html>
+<!-- 「互通」的彈出式視窗（popup.py 開的小視窗）。上面是模組的名稱，中間是訊息，下面是執行中／完成／出錯。
+     Python → 頁面：iplot.init／log／report／ask／confirm／busy／done（這個檔的最下面）
+     頁面 → Python：pywebview.api.answer／open_error／stop／close／panel
+     來自模組的字一律用 textContent；不載入任何外部資源；長相跟面板一樣，但樣式都寫在這個檔裡，不引用面板的樣式檔（ui/ 是核心的一部分）。 -->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iPLoT</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #eef0f4; --surface: #ffffff; --fg: #1c1d21; --muted: #6b7080; --line: #dfe2e9;
+    --accent: #3d6ee0; --on-accent: #ffffff; --danger: #d9463e; --hover: rgba(28, 29, 33, .06);
+    --scrim: rgba(20, 24, 40, .28); --shadow: 0 18px 50px rgba(20, 24, 40, .18);
+    --font: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181c; --surface: #242529; --fg: #ebecf0; --muted: #9a9fae; --line: #34363f;
+      --accent: #7398f4; --danger: #f0736b; --hover: rgba(235, 236, 240, .07); --scrim: rgba(0, 0, 0, .45);
+      --shadow: 0 18px 50px rgba(0, 0, 0, .5);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; overflow: hidden; background: var(--surface); color: var(--fg);
+    font: 14px/1.5 var(--font); cursor: default; }
+  header { padding: 10px 14px; border-bottom: 1px solid var(--line); font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 8px 14px; overflow: auto;
+    background: var(--bg); }
+  .entry { display: flex; gap: 8px; align-items: flex-start; }
+  .entry .m { flex: none; width: 6px; height: 6px; margin-top: 8px; border-radius: 50%; background: var(--muted); }
+  .entry.err .m { background: var(--danger); }
+  .entry .t { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; cursor: text; }
+  .entry.err .t { color: var(--danger); }
+  .acts { display: flex; gap: 6px; flex: none; }
+  .btn-s { padding: 2px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface);
+    color: var(--fg); font: inherit; font-size: 12px; }
+  .btn-s:hover { background: var(--hover); }
+  .tb { margin: 6px 0 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; overflow: auto;
+    background: var(--surface); color: var(--muted); font: 11.5px/1.45 var(--mono); white-space: pre-wrap;
+    user-select: text; }
+  footer { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 14px;
+    border-top: 1px solid var(--line); }
+  footer .status { flex: 1; min-width: 0; color: var(--muted); overflow-wrap: anywhere; }
+  footer .status.err { color: var(--danger); font-weight: 600; }
+  footer[hidden] { display: none; }
+  .scrim { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px;
+    background: var(--scrim); }
+  .scrim[hidden] { display: none; }
+  .dialog { width: min(380px, 100%); padding: 18px; border: 1px solid var(--line); border-radius: 14px;
+    background: var(--surface); box-shadow: var(--shadow); }
+  .dialog h2 { max-height: 40vh; margin: 0 0 10px; overflow: auto; font-size: 14px; font-weight: 600;
+    white-space: pre-wrap; overflow-wrap: anywhere; }
+  .dialog input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--fg); font: inherit; }
+  .dialog input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  .dialog input[hidden] { display: none; }
+  .dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .btn { padding: 6px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+    color: var(--fg); font: inherit; }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+</style>
+</head>
+<body>
+<header id="title">iPLoT</header>
+<div class="log" id="log"></div>
+<footer id="foot" hidden><span class="status" id="status"></span><span id="footActs"></span></footer>
+<div class="scrim" id="scrim" hidden>
+  <div class="dialog" role="dialog" aria-modal="true">
+    <h2 id="dlgTitle"></h2>
+    <input id="dlgInput" type="text" autocomplete="off" spellcheck="false">
+    <div class="row"><button class="btn" id="dlgCancel" type="button">取消</button><button class="btn primary" id="dlgOk" type="button">確定</button></div>
+  </div>
+</div>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const api = () => window.pywebview.api;
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+const iplot = {};
+window.iplot = iplot;
+// 倒數用的時鐘：探針可以換成假的（window.iplotClock.wait = (ms, fn) => …），不用真的等 3 秒
+window.iplotClock = { wait: (ms, fn) => setTimeout(fn, ms), stop: (id) => clearTimeout(id) };
+
+// ── 訊息區：一行一條，自動捲到底；錯誤那一條有「打開檔案」與「詳細」 ──
+function entry(text, error) {
+  const log = $("log");
+  const row = el("div", error ? "entry err" : "entry");
+  const body = el("div", "t", text);
+  row.append(el("i", "m"), body);
+  if (error) {
+    const acts = el("div", "acts");
+    if (error.file) {
+      const open = el("button", "btn-s", "打開檔案");
+      open.type = "button";
+      open.onclick = () => api().open_error(error.id);
+      acts.append(open);
+    }
+    if (error.traceback) {
+      const tb = el("pre", "tb", error.traceback);
+      tb.hidden = true;
+      const more = el("button", "btn-s", "詳細");
+      more.type = "button";
+      more.onclick = () => { tb.hidden = !tb.hidden; more.textContent = tb.hidden ? "詳細" : "收起"; };
+      acts.append(more);
+      body.append(tb);
+    }
+    row.append(acts);
+  }
+  log.append(row);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ── 下面那一列：執行中＋停止、完成的倒數、出錯了＋關閉；跑完時可能多一個「主控面板」（D88） ──
+function say(text, isError) {
+  $("foot").hidden = false;
+  const status = $("status");
+  status.textContent = text;
+  status.className = isError ? "status err" : "status";
+}
+function button(label, onclick, id) {
+  const b = el("button", "btn", label);
+  b.type = "button";
+  b.onclick = onclick;
+  if (id) b.id = id;
+  $("footActs").append(b);
+  return b;
+}
+// buttons：[[字, 按下去做什麼, id?], …]，照順序排在右邊
+function foot(text, isError, buttons) {
+  say(text, isError);
+  $("footActs").replaceChildren();
+  for (const [label, onclick, id] of buttons) button(label, onclick, id);
+}
+const close = () => api().close();
+// 回去鈕（「行事曆」或「主控面板」）：按下去先停住（Python 那邊在跑那個模組，跑完沒出錯就關掉這個小視窗）；出錯時 iplot.report 會讓它再能按
+const panel = (e) => { e.target.disabled = true; api().panel(); };
+
+let countdown = null;  // 倒數中的計時器；在視窗裡按任何一下就取消
+let interrupt = null;  // 倒數期間掛在 document 上的「按任何一下」；倒數結束或被取消就拿掉
+function listen(handler) {
+  for (const kind of ["mousedown", "keydown"]) {
+    if (interrupt) document.removeEventListener(kind, interrupt, true);
+    if (handler) document.addEventListener(kind, handler, true);
+  }
+  interrupt = handler;
+}
+
+// ── 對話框：一次只開一個，後來的排隊；Enter 確定、Esc 取消，跟面板一樣 ──
+let lastDialog = Promise.resolve();
+function dialog(kind, title, initial = "") {
+  lastDialog = lastDialog.then(() => new Promise((resolve) => {
+    const scrim = $("scrim"), input = $("dlgInput");
+    $("dlgTitle").textContent = title;
+    input.hidden = kind !== "ask";
+    input.value = initial;
+    scrim.hidden = false;
+    $("dlgTitle").scrollTop = $("dlgTitle").scrollHeight;
+    if (kind === "ask") { input.focus(); input.select(); } else $("dlgOk").focus();
+    const done = (value) => {
+      scrim.hidden = true;
+      document.removeEventListener("keydown", key, true);
+      resolve(value);
+    };
+    const ok = () => done(kind === "ask" ? input.value : true);
+    // 中文輸入法選字時按的 Enter 與 Esc 是給輸入法的，不算
+    const key = (e) => {
+      if (e.isComposing || e.keyCode === 229 || (e.key !== "Escape" && e.key !== "Enter")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") done(null); else ok();
+    };
+    $("dlgOk").onclick = (e) => { if (e.detail < 2) ok(); };
+    $("dlgCancel").onclick = (e) => { if (e.detail < 2) done(null); };
+    document.addEventListener("keydown", key, true);
+  }));
+  return lastDialog;
+}
+
+// ── Python 呼叫的七個入口 ──
+
+// 視窗標題與上面那一行：模組的顯示名稱
+iplot.init = (info) => {
+  document.title = info.title;
+  $("title").textContent = info.title;
+};
+
+iplot.log = (text) => { entry(text); };
+
+// error：kind、message、file、line、traceback、sentence（白話那一句）、id（「打開檔案」用）
+iplot.report = (error) => {
+  entry(error.sentence, error);
+  const again = $("panelBtn");
+  if (again) again.disabled = false;
+};
+
+// 問一個字串（模組的 input() 也是這個）；答案用 answer(編號, 字串或 null) 送回去
+iplot.ask = (id, prompt, initial) => { dialog("ask", prompt, initial).then((value) => api().answer(id, value)); };
+
+// 問「確定／取消」；送回 true 或 null
+iplot.confirm = (id, prompt) => { dialog("confirm", prompt).then((value) => api().answer(id, value)); };
+
+// 跑了一秒還沒結束：「執行中：<名稱>…」與「停止」（結束這一個程序，面板不受影響）
+iplot.busy = (title) => {
+  if (title === null) { $("foot").hidden = true; return; }
+  foot("執行中：" + title + "…", false, [["停止", () => api().stop()]]);
+};
+
+// 跑完了：成功或取消是「完成（x 秒），3 秒後關閉」的倒數，在視窗裡按任何一下就停下來、多一個「關閉」；出錯是「出錯了」與「關閉」。
+// offer 是回去鈕上的名字（「行事曆」或「主控面板」，由 run.py 決定，D93、D88）；null 就不給
+iplot.done = (outcome, seconds, offer) => {
+  if (countdown !== null) window.iplotClock.stop(countdown);
+  countdown = null;
+  listen(null);
+  const extra = offer ? [[offer, panel, "panelBtn"]] : [];
+  if (outcome === "error") { foot("出錯了", true, [...extra, ["關閉", close]]); return; }
+  const done = "完成（" + Number(seconds).toFixed(1) + " 秒）";
+  let left = 3;
+  foot(done + "，" + left + " 秒後關閉", false, extra);
+  const tick = () => {
+    if (left === 0) { countdown = null; listen(null); close(); return; }
+    say(done + "，" + left + " 秒後關閉", false);
+    left -= 1;
+    countdown = window.iplotClock.wait(1000, tick);
+  };
+  tick();
+  // 按任何一下：停住倒數，只改字、補上「關閉」，不重畫按鈕（重畫的話，按在「主控面板」上的那一下就落空了）
+  listen(() => {
+    window.iplotClock.stop(countdown);
+    countdown = null;
+    listen(null);
+    say(done, false);
+    button("關閉", close).focus();
+  });
+};
+</script>
+</body>
+</html>

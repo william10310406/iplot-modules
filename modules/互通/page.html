@@ -1,0 +1,178 @@
+<!doctype html>
+<!-- 在面板按「互通」看到的狀態頁（iplot.py 的 render 把資料以 JSON 放進最下面那個 application/json）。
+     頁面 → Python：pywebview.api.reveal／copy／resync。來自模組或檔案系統的字一律用 textContent；
+     不載入任何外部資源；深色模式跟著系統。 -->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>互通</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #1c1d21; --muted: #6b7080; --line: #dfe2e9; --soft: #eef0f4; --accent: #3d6ee0;
+    --danger: #d9463e; --hover: rgba(28, 29, 33, .06);
+    --font: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #242529; --fg: #ebecf0; --muted: #9a9fae; --line: #34363f; --soft: #17181c; --accent: #7398f4;
+      --danger: #f0736b; --hover: rgba(235, 236, 240, .07); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 18px 20px 24px; background: var(--bg); color: var(--fg); font: 14px/1.55 var(--font); }
+  h1 { margin: 0 0 4px; font-size: 18px; }
+  h2 { margin: 18px 0 6px; font-size: 14px; }
+  .lead { margin: 0; color: var(--muted); }
+  .note { color: var(--muted); font-size: 12.5px; }
+  pre { margin: 6px 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft);
+    font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { overflow-wrap: anywhere; }
+  li .why { color: var(--muted); }
+  #problems li, #patchProblems li { color: var(--danger); }
+  li .path { display: block; color: var(--muted); font: 11.5px/1.45 var(--mono); user-select: text; }
+  button { padding: 5px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg);
+    font: inherit; }
+  button:hover { background: var(--hover); }
+  button:disabled { opacity: .5; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<h1>互通</h1>
+<p class="lead" id="counts"></p>
+
+<section id="mac">
+  <h2>捷徑</h2>
+  <pre id="shortcuts"></pre>
+  <button id="reveal" type="button">在 Finder 中顯示</button>
+  <p class="note">把這個資料夾拖到 Dock，就是一排按鈕；也可以按 ⌘＋空白鍵，打模組的名稱。</p>
+</section>
+<section id="notMac" hidden>
+  <h2>捷徑</h2>
+  <p class="note">捷徑只在 macOS；這個系統還沒做。下面的指令與直接執行照樣能用。</p>
+</section>
+
+<section>
+  <h2>指令</h2>
+  <p class="note">在終端機、捷徑 App、快捷鍵裡用這一行打開模組（最後換成要打開的模組的名稱或資料夾）：</p>
+  <pre id="command"></pre>
+  <button id="copy" type="button">複製</button> <span class="note" id="copied"></span>
+</section>
+
+<section id="candSec" hidden>
+  <h2>可以加上那一小段的模組</h2>
+  <p class="note">加上之後，這些模組可以直接 python3 iplot.py（用彈出式視窗跑）。每個檔改之前先存一份到它自己的 .history/；不要了就把檔頭兩行「# ── 互通 ──」之間那一段整段刪掉。只限 iPLoT 的 modules/，上一層與 ROOTS 另外加的資料夾不改。</p>
+  <ul id="candidates"></ul>
+  <button id="patch" type="button"></button>
+</section>
+<p class="note" id="patchResult" hidden></p>
+<ul id="patchProblems" hidden></ul>
+
+<section>
+  <h2>沒加那一小段的模組</h2>
+  <p class="note">這些模組直接 python3 iplot.py 時是一般的腳本（沒有 app、不用彈出式視窗）；從捷徑與指令照樣打得開。</p>
+  <ul id="skipped"></ul>
+</section>
+
+<section>
+  <h2>上一次同步的問題</h2>
+  <ul id="problems"></ul>
+</section>
+
+<section>
+  <h2>記下的 Python</h2>
+  <pre id="python"></pre>
+  <p class="note">捷徑用這一個 Python。換了 Python 之後，在面板按一次「互通」重新記下。</p>
+</section>
+
+<p><button id="resync" type="button">再同步一次</button> <span class="note" id="syncing"></span></p>
+
+<script type="application/json" id="data">__STATUS__</script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+let current = null;
+
+function fill(list, items, render) {
+  list.replaceChildren();
+  if (items.length === 0) {
+    const li = document.createElement("li");
+    li.className = "why";
+    li.textContent = "沒有";
+    list.append(li);
+  }
+  for (const item of items) list.append(render(item));
+}
+
+function draw(data) {
+  current = data;
+  $("counts").textContent = data.total + " 個模組能在面板外打開（捷徑、指令）；其中 " + data.direct
+    + " 個能直接 python3 iplot.py。";
+  $("mac").hidden = !data.mac;
+  $("notMac").hidden = data.mac;
+  $("shortcuts").textContent = data.shortcuts;
+  $("command").textContent = data.command;
+  $("python").textContent = data.python;
+  fill($("skipped"), data.skipped, (s) => {
+    const li = document.createElement("li");
+    const why = document.createElement("span");
+    why.className = "why";
+    why.textContent = "：" + s.reason;
+    li.append(document.createTextNode(s.name), why);
+    return li;
+  });
+  $("candSec").hidden = data.candidates.length === 0;
+  $("patch").textContent = "加上（" + data.candidates.length + " 個檔）";
+  fill($("candidates"), data.candidates, (c) => {
+    const li = document.createElement("li");
+    const path = document.createElement("span");
+    path.className = "path";
+    path.textContent = c.path;
+    li.append(document.createTextNode(c.name), path);
+    return li;
+  });
+  fill($("problems"), data.problems, (p) => {
+    const li = document.createElement("li");
+    li.textContent = p;
+    return li;
+  });
+}
+
+draw(JSON.parse($("data").textContent));
+
+$("reveal").onclick = () => window.pywebview.api.reveal();
+$("copy").onclick = () => {
+  window.pywebview.api.copy(current.command).then((ok) => {
+    $("copied").textContent = ok ? "已複製" : "請自己選取上面那一行複製";
+  });
+};
+// 「加上」：Python 那邊自己重新算一次要加的模組（不傳任何路徑過去），回補了哪些、問題與新的狀態
+$("patch").onclick = () => {
+  $("patch").disabled = true;
+  window.pywebview.api.patch().then((r) => {
+    draw(r.status);
+    $("patchResult").hidden = false;
+    $("patchResult").textContent = r.patched.length ? "加上了 " + r.patched.length + " 個：" + r.patched.join("、") : "沒有加上任何一個";
+    const list = $("patchProblems");
+    list.hidden = r.problems.length === 0;
+    list.replaceChildren();
+    for (const p of r.problems) {
+      const li = document.createElement("li");
+      li.textContent = p;
+      list.append(li);
+    }
+  }).finally(() => { $("patch").disabled = false; });
+};
+$("resync").onclick = () => {
+  $("resync").disabled = true;
+  $("syncing").textContent = "同步中…";
+  window.pywebview.api.resync().then((data) => {
+    draw(data);
+    $("syncing").textContent = "同步好了";
+  }).finally(() => { $("resync").disabled = false; });
+};
+</script>
+</body>
+</html>
