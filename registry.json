@@ -23,7 +23,11 @@
   "打開核心原始碼": {
     "name": "打開核心原始碼",
     "owner_id": 71483597,
-    "owner": "william10310406"
+    "owner": "william10310406",
+    "version": "0.5.1",
+    "notes": "加上「互通」的那一小段：可以直接 python3 iplot.py。",
+    "issue": 8,
+    "updated": "2026-10-23"
   },
   "開terminal": {
     "name": "開Terminal",
