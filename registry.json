@@ -83,7 +83,8 @@
     "version": "0.0.1",
     "notes": "",
     "issue": 13,
-    "updated": "2026-10-23"
+    "updated": "2026-10-23",
+    "removed": true
   },
   "車車": {
     "name": "車車",
