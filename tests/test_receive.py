@@ -93,6 +93,16 @@ def test_finder_zip_end_to_end(repo, python310):
     assert api.patches == [(1, PUBLISHED)]
 
 
+def test_attachment_name_with_space_and_parens_end_to_end(repo, python310, tmp_path):
+    # 補探第 9 項：「x (1).zip」那種連結也收得到，下載的是寫成 %20 的網址
+    raw = "https://github.com/user-attachments/files/1001/x (1).zip"
+    api = FakeApi([up(1, body=form_body(f"<{raw}>"))])
+    fetch = fake_fetch({raw.replace(" ", "%20"): module_zip(tmp_path)})
+    assert run(repo, api, {}, python310, fetch=fetch) == 0
+    assert fetch.calls == ["https://github.com/user-attachments/files/1001/x%20(1).zip"]
+    assert api.patches == [(1, PUBLISHED)]
+
+
 def test_several_uploads_oldest_first(repo, python310, tmp_path):
     api = FakeApi([up(5), up(3)])
     zips = {att(5): module_zip(tmp_path, "五"), att(3): module_zip(tmp_path, "三")}

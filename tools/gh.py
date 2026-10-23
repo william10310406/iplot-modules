@@ -34,9 +34,15 @@ HEADING_AGREE = "確認"
 AGREE_TEXT = "我知道上傳的東西誰都看得到、誰都能下載執行；收到之後，這個名字只有我的帳號能更新。"
 NO_RESPONSE = "_No response_"
 
-# 檔名那一段等 Task 0 Step 10 再定；先照目前的規則（不支援括號、空白）
-ATTACHMENT_RE = re.compile(r"https://github\.com/user-attachments/files/[0-9]+/[^/?#\s)\]]+\.zip")
-URL_RE = re.compile(r"https?://[^\s)\]>]+")
+# 補探第 9 項（#5、#6）：GitHub 寫進內文的附件網址，檔名只剩 ASCII（非 ASCII 拿掉，空白、括號變成 .）。
+# 檔名那一段照原本的規則（/ ? # ] 與空白以外的字，%XX 也在裡面），多收 ASCII 空白與 )，防 GitHub 改寫法
+ATTACHMENT_RE = re.compile(r"https://github\.com/user-attachments/files/[0-9]+/(?:[^/?#\s\]]| )+\.zip")
+ATTACHMENT_PREFIX = "https://github.com/user-attachments/files/"
+URL_START = re.compile(r"https?://")
+OLD_URL = re.compile(r"https?://[^\s)\]>]+")  # 原本的抓法：到空白、)、]、> 停
+BARE_URL = re.compile(r"https?://(?:[^\s()\]>]|\([^\s()\]>]*\))+")  # 連結外面的網址：原本的抓法多收成對的括號
+# 多收的那一段最長幾個字：最長的真附件網址（檔名 255 個字、每個都寫成 %XX）也才八百多字；一行裡很多網址時，每一個只往後看這麼多
+WIDE_MAX = 1024
 DOWNLOAD_HOSTS = frozenset({"github.com", "objects.githubusercontent.com"})
 
 LABELS = {
@@ -70,12 +76,63 @@ def parse_body(body: str | None) -> Form:
     if notes_at is None or notes_at >= agree_at:
         return Form((), "", False)
 
-    section = "\n".join(lines[zip_at + 1:notes_at])
-    attachments = tuple(u for u in URL_RE.findall(section) if ATTACHMENT_RE.fullmatch(u))
+    section = lines[zip_at + 1:notes_at]
+    attachments = tuple(u for u in _urls(section) if ATTACHMENT_RE.fullmatch(u))
     text = "\n".join(lines[notes_at + 1:agree_at]).strip()
     boxes = {f"- [{mark}] {AGREE_TEXT}" for mark in "xX"}
     agreed = any(line.rstrip() in boxes for line in lines[agree_at + 1:])
     return Form(attachments, "" if text == NO_RESPONSE else text, agreed)
+
+
+def _urls(lines: list[str]) -> list[str]:
+    """每一行裡的網址，照出現的順序（補探第 9 項）。
+
+    先照原本的抓法（OLD_URL）；抓到的是附件網址就用它，跟原本一字不差。不是、而且是附件網址開頭的，再試多收的一段：
+    [文字](網址) 取到跟 ( 配對的 )、<網址> 取到 >、其他地方照 BARE_URL；那一段去頭尾空白剛好是附件網址才用它
+    （空白寫成 %20：http.client 不送網址裡的空白）。都不是就照原本的抓法、從原本停的地方接著找，同一行別的網址照樣看得到。
+    """
+    found = []
+    for line in lines:
+        pos, close, pairs, old_end = 0, None, None, -1
+        while m := URL_START.search(line, pos):
+            start, wide = m.start(), None
+            if old_end <= start:  # 還在上一段原本的抓法裡的，會停在同一個地方：不重找（一行不從頭掃好幾次）
+                matched = OLD_URL.match(line, start)
+                old_end = matched.end() if matched else start
+            old = line[start:old_end] if old_end > m.end() else None
+            if line.startswith(ATTACHMENT_PREFIX, start) and not (old and ATTACHMENT_RE.fullmatch(old)):
+                if close is None or 0 <= close < start:  # 下一個 >：一樣只往後找
+                    close = line.find(">", start)
+                if line.endswith("<", 0, start) and 0 <= close - start <= WIDE_MAX:
+                    wide = line[start:close], close + 1
+                elif line.endswith("](", 0, start):
+                    pairs = _paren_pairs(line) if pairs is None else pairs
+                    if 0 <= (end := pairs.get(start - 1, -1)) - start <= WIDE_MAX:
+                        wide = line[start:end], end + 1
+                # 停在 ( 前面的不算：那個括號沒配對，或配對的 ) 超出 WIDE_MAX（被切斷了）
+                elif ((bare := BARE_URL.match(line, start, start + WIDE_MAX + 1)) and bare.end() <= start + WIDE_MAX
+                      and not line.startswith("(", bare.end())):
+                    wide = bare.group(), bare.end()
+            if wide and ATTACHMENT_RE.fullmatch(url := wide[0].strip()):
+                found.append(url.replace(" ", "%20"))
+                pos = wide[1]
+            elif old:
+                found.append(old)
+                pos = old_end
+            else:
+                pos = start + 1
+    return found
+
+
+def _paren_pairs(line: str) -> dict[int, int]:
+    """一行裡每一個有配對的 ( 的位置 → 它的 ) 的位置；沒配對的不在裡面。"""
+    pairs, opened = {}, []
+    for i, char in enumerate(line):
+        if char == "(":
+            opened.append(i)
+        elif char == ")" and opened:
+            pairs[opened.pop()] = i
+    return pairs
 
 
 def form_refusal(form: Form) -> Refusal | None:

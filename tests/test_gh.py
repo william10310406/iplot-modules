@@ -2,6 +2,7 @@ import hashlib
 import http.client
 import io
 import json
+import threading
 import urllib.error
 from pathlib import Path
 
@@ -13,6 +14,8 @@ REAL_URLS = (
     "https://github.com/user-attachments/files/33694990/M7-.zip",
     "https://github.com/user-attachments/files/33695492/default.zip",
     "https://github.com/user-attachments/files/33698222/default.zip",
+    "https://github.com/user-attachments/files/33849894/2.zip",
+    "https://github.com/user-attachments/files/33849903/x.1.zip",
 )
 
 
@@ -28,6 +31,17 @@ def test_parse_the_real_issue_body():
     assert form.agreed is True
 
 
+@pytest.mark.parametrize("n, url", [
+    (5, "https://github.com/user-attachments/files/33849894/2.zip"),
+    (6, "https://github.com/user-attachments/files/33849903/x.1.zip"),
+])
+def test_parse_the_real_bodies_with_space_and_parens(n, url):
+    # 補探第 9 項的真內文：#5 傳「整理桌面 2.zip」、#6 傳「x (1).zip」；GitHub 把空白、括號、非 ASCII 拿掉或換成 .，沒有包 <…>
+    form = gh.parse_body((FIXTURES / f"issue-body-{n}.md").read_text(encoding="utf-8"))
+    assert form == gh.Form((url,), "", True)
+    assert gh.form_refusal(form) is None
+
+
 @pytest.mark.parametrize("url", REAL_URLS)
 def test_real_attachment_urls_are_recognised(url):
     assert gh.ATTACHMENT_RE.fullmatch(url)
@@ -37,6 +51,147 @@ def test_url_stops_at_the_closing_paren():
     body = form_body(None).replace(
         "_No response_", "[x.zip](https://github.com/user-attachments/files/1/x.zip)", 1)
     assert gh.parse_body(body).attachments == ("https://github.com/user-attachments/files/1/x.zip",)
+
+
+FILES = "https://github.com/user-attachments/files"
+A, B = f"{FILES}/1/a.zip", f"{FILES}/2/b.zip"
+
+
+def zip_section(line: str) -> str:
+    """表單內文，「模組的 zip」那一節只有 line。"""
+    return form_body(None).replace("_No response_", line, 1)
+
+
+def attachments_of(line: str) -> tuple[str, ...]:
+    """「模組的 zip」那一節只有 line 時的 attachments；5 秒內沒回來就算錯（內文是誰都寫得了的字，不能讓機器人停在這裡）。"""
+    out = []
+    worker = threading.Thread(target=lambda: out.append(gh.parse_body(zip_section(line)).attachments), daemon=True)
+    worker.start()
+    worker.join(5)
+    assert out, "parse_body 5 秒內沒有回來"
+    return out[0]
+
+
+@pytest.mark.parametrize("url", [
+    f"{FILES}/1/a(1).zip", f"{FILES}/1/x%20(1).zip", f"{FILES}/1/x (1).zip", f"{FILES}/1/x%20%281%29.zip",
+    f"{FILES}/1/((a)).zip", f"{FILES}/1/ 2.zip", f"{FILES}/1/a%2Cb.zip", f"{FILES}/1/a%2cb.zip",
+    f"{FILES}/1/a%2Bb%40c.zip", f"{FILES}/1/a,b+c;d=e@f!$&'*~^.zip",
+])
+def test_attachment_names_may_have_spaces_parens_and_percent(url):
+    assert gh.ATTACHMENT_RE.fullmatch(url)
+
+
+@pytest.mark.parametrize("url", [
+    f"{FILES}/1/a%2.zip", f"{FILES}/1/100%.zip", f"{FILES}/1/é.zip", f"{FILES}/1/a<b.zip", f"{FILES}/1/a\\b.zip",
+    f'{FILES}/1/a"b.zip', f"{FILES}/1/a[b.zip", f"{FILES}/1/a\u0001b.zip",
+])
+def test_names_the_old_rule_took_still_count(url):
+    # 原本收的照收（多一份就是 many_zips）；這些 GitHub 不會寫，下載不到的由 fetch 回「下載不到附件」
+    assert gh.ATTACHMENT_RE.fullmatch(url)
+
+
+@pytest.mark.parametrize("url", [
+    f"{FILES}/1/a/b.zip", f"{FILES}/1/a?.zip", f"{FILES}/1/a#.zip", f"{FILES}/1/a]b.zip", f"{FILES}/1/a\tb.zip",
+    f"{FILES}/1/a\nb.zip", f"{FILES}/1/a\u3000b.zip", f"{FILES}/1/a\u00a0b.zip", f"{FILES}/1/.zip",
+    f"{FILES}/1/a.ZIP", f"{FILES}/x/a.zip", f"{FILES}//a.zip", f"{FILES}/1/aXzip",
+    "https://githubXcom/user-attachments/files/1/a.zip", "http://github.com/user-attachments/files/1/a.zip",
+])
+def test_attachment_names_still_refuse_separators(url):
+    assert not gh.ATTACHMENT_RE.fullmatch(url)
+
+
+@pytest.mark.parametrize("line, url", [
+    (f"[a(1).zip]({FILES}/1/a(1).zip)", f"{FILES}/1/a(1).zip"),
+    (f"[x (1).zip]({FILES}/1/x%20(1).zip)", f"{FILES}/1/x%20(1).zip"),
+    (f"[x (1).zip]({FILES}/1/x%20%281%29.zip)", f"{FILES}/1/x%20%281%29.zip"),
+    (f"[x (1).zip](<{FILES}/1/x (1).zip>)", f"{FILES}/1/x%20(1).zip"),
+    (f"[x (1).zip]({FILES}/1/x (1).zip)", f"{FILES}/1/x%20(1).zip"),
+    (f"[整理桌面 2.zip]({FILES}/1/ 2.zip)", f"{FILES}/1/%202.zip"),
+    (f"<{FILES}/1/x (1).zip>", f"{FILES}/1/x%20(1).zip"),
+    (f"<{FILES}/1/x (1).zip >", f"{FILES}/1/x%20(1).zip"),
+    (f"<{FILES}/1/x (1).zip\t>", f"{FILES}/1/x%20(1).zip"),
+    (f"> <{FILES}/1/x (1).zip>", f"{FILES}/1/x%20(1).zip"),
+    (f"(見 {FILES}/1/a(1).zip)", f"{FILES}/1/a(1).zip"),
+    (f"{FILES}/1/().zip>", f"{FILES}/1/().zip"),
+    (f") [x]({FILES}/1/a(1).zip)", f"{FILES}/1/a(1).zip"),
+    (f"[x]({FILES}/1/{'a' * 60} (1).zip)", f"{FILES}/1/{'a' * 60}%20(1).zip"),
+    # 原本的抓法就收得到的，照原本的收
+    (f'[x.zip]({A} "標題")', A),
+    (f'[x.zip]({A}\t"標題")', A),
+    (f"[x.zip]({A} b.zip)", A),
+    (f"[x.zip]({A}", A),
+    (f"[x.zip]({A} )", A),
+    (f"<{A} >", A),
+    (f"<{A}", A),
+    (f"[{A}]", A),
+    (f"< {A}>", A),
+    (f"http://]{A}", A),
+    (f"{FILES}/1/(.zip>", f"{FILES}/1/(.zip"),
+    (f"見 {FILES}/1/a(b.zip", f"{FILES}/1/a(b.zip"),
+    (f"[報告(初稿.zip]({FILES}/1/a(.zip)", f"{FILES}/1/a(.zip"),
+    (f"{FILES}/1/x.zip(註)、{B}", B),
+    (f"{FILES}/1/x.zip(舊 版)、{B}", B),
+    (f"[說明](https://example.com/readme [x.zip]({A})", A),
+    (f"<https://example.com/a  [x.zip]({A}) <br>", A),
+    # 每一行重新找：上一行的位置不帶到下一行
+    (f"https://example.com/{'x' * 100}\n{FILES}/1/a(b.zip c", f"{FILES}/1/a(b.zip"),
+    (f"{FILES}/1/>\n<{FILES}/1/x (1).zip>", f"{FILES}/1/x%20(1).zip"),
+])
+def test_attachment_link_with_spaces_parens_and_percent(line, url):
+    # 補探第 9 項：先照原本的抓法（到空白、)、]、> 停）；抓到的不是附件網址，再試連結取到配對的 )、<…> 取到 >、
+    # 外面的多收成對的括號，整段剛好是附件網址才用（空白寫成 %20）
+    assert attachments_of(line) == (url,)
+
+
+@pytest.mark.parametrize("line", [
+    f"見 {FILES}/1/a(1 2).zip", f"[x](http://example.com/?u={A})", f"[x.zip]({FILES}/1/x.ZIP)",
+    f"< {FILES}/1/x (1).zip>", f"({FILES}/1/x (1).zip)", f"[x]({FILES}/1/a(1).zip", f"{FILES}/1/(().zip",
+    f"<{FILES}/2/a.zipa", f"]({FILES}/2/a.zipa", f"{FILES}/1/a.zip({'b' * 2100})",
+    f"{FILES}/1/{'a' * (1024 - 51)}.zip(b)", f"{FILES}/1/{'a' * (1024 - 52)}.zip(b)",
+])
+def test_lines_without_an_attachment_url(line):
+    assert attachments_of(line) == ()
+
+
+def long_url(n: int, gap: str) -> str:
+    """長度剛好 n 的附件網址；檔名有 gap 加括號，原本的抓法抓不到。"""
+    head, tail = f"{FILES}/1/", f"{gap}(1).zip"
+    return head + "a" * (n - len(head) - len(tail)) + tail
+
+
+@pytest.mark.parametrize("wrap, gap", [("<{}>", " "), ("[x]({})", " "), ("[x](<{}>)", " "), ("見 {}", "")])
+def test_the_wider_span_is_at_most_wide_max(wrap, gap):
+    fits, too_long = long_url(gh.WIDE_MAX, gap), long_url(gh.WIDE_MAX + 1, gap)
+    assert attachments_of(wrap.format(fits)) == (fits.replace(" ", "%20"),)
+    assert attachments_of(wrap.format(too_long)) == ()
+
+
+@pytest.mark.parametrize("line", [
+    f"{A} {B}", f"({A} {B})", f"[a](<{FILES}/1/a (1).zip>) [b](<{FILES}/2/b (2).zip>)", f"[a.zip]({A}\n[b.zip]({B})",
+    f"[a.zip]({A} [b.zip]({B})", f"<{A} {B}>", f"[x]({A} {B})", f"<{A} 和 [b.zip]({B}) ->",
+    f"[a(1).zip]({FILES}/1/a(1).zip) [b (2).zip](<{FILES}/2/b (2).zip>)", f"[a.zip]({A})\n[é.zip]({FILES}/2/é.zip)",
+])
+def test_two_zips_on_one_line_are_never_counted_as_one(line):
+    assert len(attachments_of(line)) == 2
+    assert refusal_key(zip_section(line)) == "many_zips"
+
+
+@pytest.mark.parametrize("line", [
+    f"<{A}" * 300, f"[x]({FILES}/1/(" * 300, f"{FILES}/1/(a)" * 300, "<https://" * 1000, f"<{FILES}/1/a " * 300,
+    f"](<{FILES}/1/a(.zip)" * 300, f"{FILES}/1/x.zip(" * 300, f"<{FILES}/1/{' ' * 60}x>", f"[x]({FILES}/1/{' ' * 60}x)",
+])
+def test_long_odd_lines_finish(line):
+    attachments_of(line)
+
+
+def test_a_parsed_url_with_a_space_downloads(tmp_path, http_server):
+    """網址裡的空白 http.client 不送（InvalidURL）：parse_body 交出去的是 %20，下載得到。"""
+    server = http_server({"/files/1/x%20(1).zip": ok})
+    [url] = gh.parse_body(zip_section(f"[x (1).zip](<{FILES}/1/x (1).zip>)")).attachments
+    local = url.replace("https://github.com/user-attachments", server.url(""))
+    assert gh.fetch(local, tmp_path / "m.zip", allowed=allow_all) == hashlib.sha256(b"zipbytes" * 100).hexdigest()
+    with pytest.raises(gh.DownloadError):
+        gh.fetch(server.url("/files/1/x (1).zip"), tmp_path / "n.zip", allowed=allow_all)
 
 
 def test_a_heading_inside_the_notes_opens_no_section():
