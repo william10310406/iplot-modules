@@ -1,0 +1,425 @@
+<!doctype html>
+<!-- 行事曆的畫面。資料全部經 iplot.py 的 Api（pywebview.api）拿與存；呼叫一律經 call()，排成一條佇列。
+     沒有任何外部資源；來自資料的字一律 textContent。 -->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>行事曆</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1c1d21; --muted: #6b7080; --line: #dfe2e9; --accent: #d9463e;
+  --on-accent: #ffffff; --soft: #f4f5f8; --has: #fdeceb; --today: #d9463e; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #242529; --fg: #ebecf0; --muted: #9a9fae; --line: #34363f; --accent: #f0736b; --soft: #2d2f35;
+    --has: #3a2b2b; --today: #f0736b; }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--fg);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", "Segoe UI", sans-serif; }
+button { padding: 3px 10px; border: 1px solid var(--line); border-radius: 7px; background: none; color: var(--fg);
+  font: inherit; font-size: 13px; cursor: pointer; }
+button.on { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+button:disabled { opacity: .5; }
+.bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+#mods { flex: 1; display: flex; gap: 4px; overflow-x: auto; }
+#mods button { min-width: 30px; padding: 2px 6px; font-size: 16px; }
+.spacer { flex: 1; }
+#title { min-width: 120px; text-align: center; font-weight: 600; }
+#view { flex: 1; overflow: auto; padding: 8px 10px; }
+#status { padding: 3px 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; min-height: 22px; }
+#status.bad { color: var(--accent); }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+th { color: var(--muted); font-weight: normal; font-size: 12px; padding-bottom: 2px; }
+table.month td { height: 64px; border: 1px solid var(--line); vertical-align: top; padding: 2px 4px; cursor: pointer;
+  font-size: 12px; overflow: hidden; }
+table.month td.blank { border: none; cursor: default; }
+table.month td.has { background: var(--has); }
+table.month td.today .n { color: var(--on-accent); background: var(--today); border-radius: 9px; padding: 0 5px; }
+.n { color: var(--muted); }
+.first { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all; }
+.months { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.months h3 { margin: 0 0 2px; font-size: 13px; }
+table.mini td { text-align: center; font-size: 11px; height: 19px; cursor: pointer; color: var(--muted); }
+table.mini td.has { background: var(--has); color: var(--fg); border-radius: 4px; }
+table.mini td.today { outline: 1px solid var(--today); border-radius: 4px; }
+.day h2 { margin: 0 0 6px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.moods { display: flex; gap: 4px; align-items: center; margin-bottom: 6px; }
+.moods button { font-size: 18px; padding: 0 6px; }
+.moods input { flex: 1; }
+input[type=text], textarea { width: 100%; padding: 5px 7px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); color: var(--fg); font: inherit; }
+textarea { min-height: 56px; resize: vertical; }
+label.field { display: block; margin: 6px 0 2px; color: var(--muted); font-size: 12px; }
+.unreadable { color: var(--accent); font-size: 12px; margin: 2px 0; word-break: break-all; }
+.photos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; padding: 6px;
+  border: 1px dashed var(--line); border-radius: 8px; min-height: 58px; }
+.photos.drag { border-color: var(--accent); background: var(--soft); }
+.photo { position: relative; }
+.photo img { height: 64px; border-radius: 5px; display: block; }
+.photo .noimg { display: block; height: 64px; padding: 20px 6px; background: var(--soft); border-radius: 5px; font-size: 11px; }
+.photo button { position: absolute; top: -6px; right: -6px; padding: 0 5px; border-radius: 9px; background: var(--bg); }
+.publicrow { margin-top: 8px; }
+.overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, .35); display: flex; align-items: center; justify-content: center; }
+.overlay[hidden] { display: none; }
+.box { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px; width: min(460px, 92%);
+  max-height: 86%; overflow: auto; }
+.box p { margin: 0 0 10px; word-break: break-all; }
+.box .row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; margin-top: 8px; }
+.box ul { margin: 0 0 8px; padding-left: 18px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="bar"><div id="mods"></div><button id="panel" hidden title="主控面板">圖示面板</button></div>
+<div class="bar">
+  <button id="vYear">年</button><button id="vMonth">月</button><button id="vDay">日</button>
+  <button id="prev" title="上一個">‹</button><span id="title"></span><button id="next" title="下一個">›</button>
+  <button id="today">今天</button><span class="spacer"></span>
+  <button id="web">看網頁</button><button id="publish">發佈</button><button id="gear" title="設定">⚙</button>
+</div>
+<div id="view"></div>
+<div id="status"></div>
+<div class="overlay" id="ask" hidden><div class="box"><p id="askText"></p><div class="row">
+  <button id="askNo">取消</button><button id="askYes" class="on">產生</button></div></div></div>
+<div class="overlay" id="info" hidden><div class="box"><p id="infoText"></p><ul id="infoList"></ul><div class="row">
+  <button id="infoClose">關閉</button></div></div></div>
+<div class="overlay" id="settings" hidden><div class="box">
+  <p>資料夾：<span id="folder"></span></p>
+  <div class="row"><button id="change">換資料夾</button><button id="reveal">打開資料夾</button>
+    <button id="openIndex">打開綜合網頁</button><button id="rebuild">重建全部網頁</button></div>
+  <div class="row"><button id="settingsClose">關閉</button></div></div></div>
+<input id="files" type="file" multiple accept="image/*" hidden>
+<script>
+"use strict";
+const MOODS = ["😄", "🙂", "😐", "😟", "😢"];
+const FIELDS = [["行程", "行程"], ["看到", "看到了什麼"], ["做了", "做了什麼"]];
+const WEEK = "日一二三四五六";
+const SAVE_AFTER = 1000;  // 打字停 1 秒就存
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null) e.textContent = text;
+  return e;
+};
+const pad = (n) => String(n).padStart(2, "0");
+const ymd = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+const parse = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+
+// 所有 Python 呼叫排成一條佇列：一個做完才送下一個（存與拖圖不會交錯）
+let last = Promise.resolve();
+const call = (name, ...args) => {
+  const p = last.then(() => window.pywebview.api[name](...args));
+  last = p.catch(() => null);
+  return p.then((r) => { if (r && r.error) say(r.error, true); return r || {}; },
+                (e) => { say(String(e && e.message || e), true); return { error: String(e) }; });
+};
+const say = (text, bad) => { $("status").textContent = text || ""; $("status").className = bad ? "bad" : ""; };
+
+let view = "month", cur = new Date(), todayText = ymd(new Date()), day = null, dirty = false, timer = null;
+
+function setView(v) {
+  view = v;
+  for (const [id, name] of [["vYear", "year"], ["vMonth", "month"], ["vDay", "day"]]) $(id).className = v === name ? "on" : "";
+}
+
+async function go(v, date) {
+  if (!(await saveDay())) return;  // 存不進去：留在這一天，字還在輸入框裡
+  if (view === "day" && v !== "day") day = null;
+  if (date) cur = date;
+  setView(v);
+  if (v === "month") return showMonth();
+  if (v === "year") return showYear();
+  return showDay();
+}
+
+async function showMonth() {
+  const ym = cur.getFullYear() + "-" + pad(cur.getMonth() + 1);
+  const r = await call("month", ym);
+  if (r.error) return;
+  todayText = r.today || todayText;
+  $("title").textContent = cur.getFullYear() + " 年 " + (cur.getMonth() + 1) + " 月";
+  const table = el("table", "month"), head = el("tr");
+  for (const w of WEEK) head.append(el("th", "", w));
+  table.append(head);
+  const first = new Date(cur.getFullYear(), cur.getMonth(), 1).getDay();
+  const days = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
+  let row = el("tr");
+  for (let i = 0; i < first; i++) row.append(el("td", "blank"));
+  for (let n = 1; n <= days; n++) {
+    const info = r.days[pad(n)], date = new Date(cur.getFullYear(), cur.getMonth(), n), td = el("td");
+    td.className = (info ? "has" : "") + (ymd(date) === todayText ? " today" : "");
+    td.append(el("span", "n", n));
+    if (info) {
+      if (info.mood) td.append(" ", el("span", "", info.mood));
+      if (info.images) td.append(" ", el("span", "", "🖼"));
+      if (info.public) td.append(" ", el("span", "", "🌐"));
+      if (info.first) td.append(el("span", "first", info.first));
+    }
+    td.addEventListener("click", () => go("day", date));
+    row.append(td);
+    if ((first + n) % 7 === 0) { table.append(row); row = el("tr"); }
+  }
+  if (row.children.length) table.append(row);
+  $("view").replaceChildren(table);
+}
+
+async function showYear() {
+  const y = cur.getFullYear(), r = await call("year", String(y));
+  if (r.error) return;
+  $("title").textContent = y + " 年";
+  const grid = el("div", "months");
+  for (let m = 1; m <= 12; m++) {
+    const box = el("div"), moods = r.months[pad(m)] || {}, table = el("table", "mini"), head = el("tr");
+    box.append(el("h3", "", m + " 月"));
+    for (const w of WEEK) head.append(el("th", "", w));
+    table.append(head);
+    const first = new Date(y, m - 1, 1).getDay(), days = new Date(y, m, 0).getDate();
+    let row = el("tr");
+    for (let i = 0; i < first; i++) row.append(el("td"));
+    for (let n = 1; n <= days; n++) {
+      const date = new Date(y, m - 1, n), mood = moods[pad(n)], td = el("td", "", mood === undefined ? n : (mood || "·"));
+      td.className = (mood !== undefined ? "has" : "") + (ymd(date) === todayText ? " today" : "");
+      td.title = m + " 月 " + n + " 日";
+      td.addEventListener("click", () => go("day", date));
+      row.append(td);
+      if ((first + n) % 7 === 0) { table.append(row); row = el("tr"); }
+    }
+    if (row.children.length) table.append(row);
+    box.append(table);
+    grid.append(box);
+  }
+  $("view").replaceChildren(grid);
+}
+
+function touched() {
+  dirty = true;
+  clearTimeout(timer);
+  timer = setTimeout(saveDay, SAVE_AFTER);
+}
+
+// 存這一天；沒有要存的或存好了回 true，存不進去回 false（dirty 留著，下一次再試）
+async function saveDay() {
+  clearTimeout(timer);
+  if (!day || !dirty) return true;
+  const fields = {};
+  if (!day.unreadable["心情"]) { fields.mood = day.mood; fields.note = $("note").value; }
+  for (const [key] of FIELDS) if (!day.unreadable[key]) fields[key] = $("f-" + key).value;
+  dirty = false;
+  const r = await call("save", day.date, fields);
+  if (r.error) { dirty = true; return false; }  // 字留在輸入框裡，下一次再試
+  for (const sentence of r.unreadable || []) say(sentence, true);
+  if (!(r.unreadable || []).length) say("已存");
+  return true;
+}
+
+function photoRow(images) {
+  const row = $("photos");
+  row.replaceChildren();
+  for (const image of images) {
+    const box = el("span", "photo");
+    if (image.src) {
+      const img = el("img");
+      img.addEventListener("error", () => img.replaceWith(el("span", "noimg", image.name)));  // 顯示不出來就寫檔名
+      img.src = image.src; img.alt = ""; img.title = image.name;
+      box.append(img);
+    }
+    else box.append(el("span", "noimg", image.name));
+    const x = el("button", "", "×");
+    x.title = "拿掉 " + image.name;
+    x.addEventListener("click", async () => { const r = await call("remove_image", day.date, image.name); if (r.images) photoRow(r.images); });
+    box.append(x);
+    row.append(box);
+  }
+  const add = el("button", "", "加圖片");
+  add.addEventListener("click", () => $("files").click());
+  row.append(add);
+}
+
+function addFiles(files) {
+  const date = day.date;
+  for (const file of files) {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      say("加入中：" + file.name);
+      const r = await call("add_image", date, file.name, reader.result);
+      if (day && day.date === date && r.images) photoRow(r.images);
+      if (!r.error) say("已加入：" + file.name);
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+async function showDay() {
+  const date = ymd(cur), r = await call("day", date);
+  if (r.error) return;
+  day = r;
+  dirty = false;
+  $("title").textContent = (cur.getMonth() + 1) + " 月 " + cur.getDate() + " 日（" + WEEK[cur.getDay()] + "）";
+  const box = el("div", "day");
+  box.append(el("h2", "", cur.getFullYear() + " 年 " + (cur.getMonth() + 1) + " 月 " + cur.getDate() + " 日"));
+  const moods = el("div", "moods");
+  if (day.unreadable["心情"]) {
+    box.append(el("p", "unreadable", "讀不到這個檔（不是 UTF-8），沒有覆寫它：" + day.unreadable["心情"]));
+  } else {
+    for (const m of MOODS) {
+      const b = el("button", m === day.mood ? "on" : "", m);
+      b.addEventListener("click", () => {
+        day.mood = day.mood === m ? "" : m;  // 再點一次取消
+        for (const other of moods.querySelectorAll("button")) other.className = other.textContent === day.mood ? "on" : "";
+        dirty = true;
+        saveDay();
+      });
+      moods.append(b);
+    }
+    const note = el("input");
+    note.type = "text"; note.id = "note"; note.placeholder = "一句話"; note.value = day.note;
+    note.addEventListener("input", touched);
+    note.addEventListener("blur", saveDay);
+    moods.append(note);
+    box.append(moods);
+  }
+  for (const [key, label] of FIELDS) {
+    box.append(el("label", "field", label));
+    if (day.unreadable[key]) {
+      box.append(el("p", "unreadable", "讀不到這個檔（不是 UTF-8），沒有覆寫它：" + day.unreadable[key]));
+      continue;
+    }
+    const t = el("textarea");
+    t.id = "f-" + key; t.value = day[key];
+    t.addEventListener("input", touched);
+    t.addEventListener("blur", saveDay);
+    box.append(t);
+  }
+  const photos = el("div", "photos");
+  photos.id = "photos";
+  photos.title = "把照片拖進來";
+  photos.addEventListener("dragover", (e) => { e.preventDefault(); photos.classList.add("drag"); });
+  photos.addEventListener("dragleave", () => photos.classList.remove("drag"));
+  photos.addEventListener("drop", (e) => { e.preventDefault(); photos.classList.remove("drag"); addFiles(e.dataTransfer.files); });
+  box.append(photos);
+  const pub = el("label", "publicrow"), check = el("input");
+  check.type = "checkbox"; check.checked = day.public;
+  check.addEventListener("change", async () => {
+    const r2 = await call("set_public", day.date, check.checked);
+    if (r2.error) check.checked = !check.checked; else say(r2.public ? "這一天會放上網路（按「發佈」才產生）" : "這一天不公開");
+  });
+  pub.append(check, " 公開（按「發佈」時放上網路）");
+  box.append(pub);
+  $("view").replaceChildren(box);
+  photoRow(day.images);
+}
+
+function step(n) {
+  if (view === "month") return go("month", new Date(cur.getFullYear(), cur.getMonth() + n, 1));
+  if (view === "year") return go("year", new Date(cur.getFullYear() + n, 0, 1));
+  return go("day", new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + n));
+}
+
+async function loadModules() {
+  const r = await call("modules");
+  if (r.error) return;
+  const bar = $("mods");
+  bar.replaceChildren();
+  for (const m of r.modules) {
+    const b = el("button", "", m.icon);
+    b.title = m.title;
+    b.addEventListener("click", async () => { const r2 = await call("launch", m.name); if (!r2.error) say("打開「" + m.title + "」"); });
+    bar.append(b);
+  }
+  $("panel").hidden = !r.panel;
+}
+
+// 行事曆整天開著：視窗重新拿到焦點時重掃模組列，也重新算今天（過了午夜就換掉「今天」）
+function onFocus() {
+  loadModules();
+  refreshToday();
+}
+
+function refreshToday() {
+  const now = ymd(new Date());
+  if (now === todayText) return;
+  todayText = now;
+  if (view !== "day") go(view);  // 月、年檢視重畫，今天的標記換過來；日檢視正在打字，不重畫（「今天」鈕已經用新的日子）
+}
+
+async function publish() {
+  if (!(await saveDay())) return;
+  const s = await call("settings");
+  if (s.error) return;
+  if (!s.public_days) {  // 沒有公開的日子：回「還沒有打開「公開」的日子」，或拿掉了上一次的 發佈/ 並說一句
+    const r = await call("publish");
+    if (r.note) say(r.note);
+    return;
+  }
+  $("askText").textContent = "要放上網路的有 " + s.public_days + " 天（只有打開『公開』的日子）。產生發佈用的資料夾？";
+  $("ask").hidden = false;
+}
+
+async function confirmPublish() {
+  $("ask").hidden = true;
+  say("產生中…");
+  const r = await call("publish");
+  if (r.error) return;
+  $("infoText").textContent = "放了 " + r.days + " 天到：" + r.folder + "。" + r.note;
+  $("infoList").replaceChildren(...(r.problems || []).map((p) => el("li", "", p)));
+  $("info").hidden = false;
+  say("發佈用的資料夾產生好了");
+}
+
+async function openSettings() {
+  const s = await call("settings");
+  if (s.error) return;
+  $("folder").textContent = s.folder;
+  $("settings").hidden = false;
+}
+
+function web() {
+  if (view === "day") return call("open_page", "day", ymd(cur));
+  if (view === "year") return call("open_page", "year", String(cur.getFullYear()));
+  return call("open_page", "month", cur.getFullYear() + "-" + pad(cur.getMonth() + 1));
+}
+
+function wire() {
+  $("vYear").addEventListener("click", () => go("year"));
+  $("vMonth").addEventListener("click", () => go("month"));
+  $("vDay").addEventListener("click", () => go("day"));
+  $("prev").addEventListener("click", () => step(-1));
+  $("next").addEventListener("click", () => step(1));
+  $("today").addEventListener("click", () => go(view, parse(todayText)));
+  $("web").addEventListener("click", web);
+  $("publish").addEventListener("click", publish);
+  $("askNo").addEventListener("click", () => { $("ask").hidden = true; });
+  $("askYes").addEventListener("click", confirmPublish);
+  $("infoClose").addEventListener("click", () => { $("info").hidden = true; });
+  $("gear").addEventListener("click", openSettings);
+  $("settingsClose").addEventListener("click", () => { $("settings").hidden = true; });
+  $("change").addEventListener("click", async () => {
+    if (!(await saveDay())) return;
+    const s = await call("change_folder");
+    if (s.error) return;
+    $("folder").textContent = s.folder;
+    go(view);
+  });
+  $("reveal").addEventListener("click", () => call("reveal_folder"));
+  $("openIndex").addEventListener("click", () => call("open_page", "index", ""));
+  $("rebuild").addEventListener("click", async () => { const r = await call("rebuild"); if (!r.error) say("重建了 " + r.pages + " 頁"); });
+  $("panel").addEventListener("click", () => call("launch", "主控面板"));
+  $("files").addEventListener("change", (e) => { if (day) addFiles(e.target.files); e.target.value = ""; });
+  window.addEventListener("focus", onFocus);  // 重掃模組列（設計第 15 節第 7 條）、過了午夜換「今天」
+  window.addEventListener("pagehide", saveDay);   // 關視窗時盡力再存一次
+  document.addEventListener("dragover", (e) => e.preventDefault());
+  document.addEventListener("drop", (e) => e.preventDefault());  // 拖到別處不要讓瀏覽器打開那張圖
+}
+
+let started = false;
+function start() {
+  if (started) return;
+  started = true;
+  wire();
+  go("month", new Date());
+  loadModules();
+}
+if (window.pywebview && window.pywebview.api) start(); else window.addEventListener("pywebviewready", start);
+</script>
+</body>
+</html>
