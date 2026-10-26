@@ -54,7 +54,7 @@ def _parses(text: str) -> bool:
 def candidates(home: pathlib.Path, config) -> list:
     """可以加上那一小段的模組（D87）：在 iPLoT 的 modules/ 裡（包括它底下各層）、sync.why_not 回 None、
     還沒有記號、ast 讀得懂。上一層（".."）與 ROOTS 另外加的根目錄底下的一律不算。回 [(ModuleInfo, 一路的名稱)]。"""
-    import snippet
+    import snippet  # noqa: I001  core 在 iPLoT 是第一方、在 iplot-modules 是第三方：兩邊的 isort 要的空行不一樣
     import sync
 
     from core import scan
@@ -74,7 +74,7 @@ def candidates(home: pathlib.Path, config) -> list:
 def status(home: pathlib.Path, config, python: str, folder: pathlib.Path) -> dict:
     """狀態頁要的資料：幾個模組能在面板外打開、幾個能直接執行、可以加上那一小段的（名稱與 iplot.py 的路徑）、
     沒加的與原因、捷徑在哪、指令怎麼寫、上一次同步的問題。"""
-    import shortcut
+    import shortcut  # noqa: I001  同上
     import snippet
     import sync
 

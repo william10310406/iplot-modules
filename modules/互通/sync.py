@@ -4,7 +4,7 @@
 同步只寫「互通」自己的資料夾。舊模組要加上那一小段，只能在「互通」的狀態頁按「加上」（iplot.py 的 patch），
 只限 iPLoT 的 modules/。這裡另外放兩件狀態頁也用的事：列出所有模組（modules）、為什麼不加（why_not）。"""
 
-import ast
+import ast  # noqa: I001  core 在 iPLoT 是第一方、在 iplot-modules 是第三方：兩邊的 isort 要的空行不一樣
 import contextlib
 import os
 import sys
