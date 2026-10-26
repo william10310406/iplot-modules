@@ -1,0 +1,226 @@
+<!doctype html>
+<!-- 「回報與討論」的預覽頁（iplot.py 的 render 把資料以 JSON 放進最下面那個 application/json）。
+     mode 是 "edit"（on_error）：一開始就是 #edit；"menu"（run）：先是 #menu 的四個入口，「回報問題」叫 start 換到 #edit。
+     最後一行的 #hint（「完整報告已複製…」）只跟著 #edit 顯示（show）：#menu 上什麼都還沒複製。按下去之後換成 send 回來的
+     r.hint（網址內文最後也是它）：沒複製成的話指向 回報/ 的 .txt 或下面那一格，不說「已複製」；「再複製一次」照那一下換。
+     頁面 → Python：pywebview.api.measure（量網址長度、拿 Python 遮過的全文）、send（再遮一次、存檔、開瀏覽器）；
+     #menu 另外叫 start（拿那一份回報）、go（提建議、問問題）、open_forum（看論壇）。
+     剪貼簿：按鈕的 click 裡、叫 send 之前，用 execCommand 複製 #full 那一格；#full 只放 measure 回來的、遮過的全文，
+     標題、內文那兩格從不拿去複製。#full 不能藏起來（藏起來的選不起來），所以放在畫面外。
+     字一律用 textContent／value；不放連結（會讓這個視窗自己換頁），網址一律經過 send、go、open_forum；
+     不載入任何外部資源；深色模式跟著系統。 -->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>回報與討論</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1c1d21; --muted: #6b7080; --line: #dfe2e9; --accent: #3d6ee0;
+  --on-accent: #ffffff; --danger: #d9463e; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #242529; --fg: #ebecf0; --muted: #9a9fae; --line: #34363f; --accent: #7398f4; --danger: #f0736b; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 14px 18px; background: var(--bg); color: var(--fg);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", "Segoe UI", sans-serif; }
+.notice { margin: 0 0 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; }
+label { display: block; margin: 8px 0 2px; color: var(--muted); font-size: 12.5px; }
+input, textarea, select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); color: var(--fg); font: inherit; }
+textarea { font: 12px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; resize: vertical; }
+#body { height: 20em; }
+#url, #link { height: 6em; margin-top: 6px; }
+.note { margin: 6px 0; color: var(--muted); font-size: 12.5px; }
+.note.over { color: var(--danger); }
+.login { margin: 10px 0; }
+#result { white-space: pre-line; }
+.row { display: flex; gap: 6px; align-items: center; }
+.row input, .row select { flex: 1; min-width: 0; }
+button { padding: 4px 12px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent);
+  color: var(--on-accent); font: inherit; font-size: 13px; white-space: nowrap; }
+button.plain { border-color: var(--line); background: none; color: var(--fg); }
+button:disabled { opacity: .5; }
+#full { position: absolute; left: -9999px; width: 10px; height: 10px; }  /* 直的位置不動：選它時畫面不會跳到最上面 */
+#full.shown { position: static; width: 100%; height: 12em; margin-top: 6px; }
+.hint { margin: 14px 0 0; color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<section id="menu">
+  <p class="notice">論壇是公開的，任何人都看得到。「回報問題」會先讓你看過、改過要送出的內容；其他三個直接用瀏覽器打開。</p>
+  <label for="module">回報問題（畫面不對、太慢、結果不對，沒有出現錯誤訊息的）：相關的模組</label>
+  <div class="row"><select id="module"><option value="">（不指定模組）</option></select><button id="report" type="button" disabled>回報問題</button></div>
+  <p class="note">提建議、問問題的內文最後會帶這一行（版本與作業系統，沒有路徑）：<span id="env"></span></p>
+  <p class="row"><button id="idea" type="button" disabled>提建議</button><button id="qa" type="button" disabled>問問題</button><button id="forum" type="button" disabled>看論壇</button></p>
+  <p id="said"></p>
+  <textarea id="link" readonly hidden></textarea>
+</section>
+<section id="edit">
+  <p class="notice"><span id="notice"></span>論壇是公開的，任何人都看得到；送出前請再看一次，特別是學生的名字。不送的話，直接關掉這個視窗。</p>
+  <label for="title">標題</label>
+  <input id="title" type="text" spellcheck="false">
+  <label for="body">內文</label>
+  <textarea id="body" spellcheck="false"></textarea>
+  <p class="note" id="length">量網址長度中…</p>
+  <p class="login"><b>按之前先確認這台電腦的瀏覽器已經登入 GitHub。</b> 沒登入的話，登入之後 GitHub 可能出錯、填好的內容會不見；那時候直接貼上剪貼簿裡的就好。</p>
+  <p><button id="open" type="button" disabled>在瀏覽器打開</button></p>
+  <p id="result"></p>
+  <div id="after" hidden>
+    <label for="newUrl">GitHub 出錯時，打開這個新增頁，把內文整個換成完整的回報：</label>
+    <div class="row"><input id="newUrl" type="text" readonly><button id="again" class="plain" type="button" disabled>再複製一次</button></div>
+  </div>
+  <textarea id="url" readonly hidden></textarea>
+</section>
+<textarea id="full" readonly tabindex="-1"></textarea>
+<p class="hint" id="hint"></p>
+<script type="application/json" id="data">__DATA__</script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const data = JSON.parse($("data").textContent);
+let seq = 0;        // 每一次輸入、每一次 measure 都加一：回來的不是最新的那一次就丟掉（pywebview 的回應不照順序）
+let timer = 0;
+let started = false;
+let sentence = "";  // send 回來的那一句；「再複製一次」只換後面講剪貼簿的那一段
+let uncopied = "";  // send 回來的、沒複製成時 #hint 的那一句：「再複製一次」沒成的時候用
+
+function why(e) {
+  return (e && e.message) || String(e);
+}
+
+// 「在瀏覽器打開」與「再複製一次」：亮著的時候，#full 一定是現在這份內容遮過的樣子
+function ready(on) {
+  $("open").disabled = !on;
+  $("again").disabled = !on;
+}
+
+function measure() {
+  const n = ++seq;
+  ready(false);
+  window.pywebview.api.measure($("title").value, $("body").value).then((r) => {
+    if (n !== seq) return;
+    $("full").value = r.full;
+    $("length").textContent = r.sentence;
+    $("length").classList.toggle("over", r.length > r.limit);
+    ready(true);
+  }).catch((e) => {
+    if (n !== seq) return;
+    $("length").textContent = "量不到長度：" + why(e) + "。請關掉這個視窗再試一次";
+  });
+}
+
+function edited() {
+  if (!started) return;  // 還沒連上 Python：connected 會量現在的內容
+  ++seq;                 // 還在路上的那一次回來時丟掉，按鈕維持灰
+  ready(false);
+  clearTimeout(timer);
+  timer = setTimeout(measure, 300);
+}
+
+// 剪貼簿成不成那一句；不成的話把 #full 移回畫面上，讓人自己全選、複製
+function clip(copied, again) {
+  if (copied) return again ? "完整的回報又複製到剪貼簿了。" : "完整的回報已經複製到剪貼簿。";
+  $("full").classList.add("shown");
+  $("full").tabIndex = 0;
+  return "剪貼簿沒有複製成功：請在下面這一格全選、複製。";
+}
+
+$("open").addEventListener("click", () => {
+  $("full").focus({ preventScroll: true });
+  $("full").select();
+  const copied = document.execCommand("copy");  // 同步、在 click 裡、叫 send 之前：瀏覽器只讓按下去的那一下複製
+  const n = seq;
+  ready(false);
+  window.pywebview.api.send($("title").value, $("body").value, copied).then((r) => {  // 成不成交給 Python：網址的最後一句
+    sentence = r.sentence;
+    uncopied = r.uncopied;
+    $("result").textContent = sentence + clip(copied, false);
+    $("hint").textContent = r.hint;
+    $("url").value = r.url;
+    $("url").hidden = !r.url;
+    $("newUrl").value = r.new_url;
+    $("after").hidden = false;
+  }).catch((e) => {
+    $("result").textContent = "送不出去：" + why(e);
+  }).finally(() => {
+    if (n === seq) ready(true);  // 送的時候又改了字：等那一次 measure 回來才亮
+  });
+});
+
+$("again").addEventListener("click", () => {
+  $("full").focus({ preventScroll: true });
+  $("full").select();
+  const copied = document.execCommand("copy");
+  $("result").textContent = sentence + clip(copied, true);
+  $("hint").textContent = copied ? data.hint : uncopied;
+});
+
+// 顯示 #menu 或 #edit。#hint 跟著 #edit：它說「完整報告已複製」，#menu 上什麼都還沒複製（提建議、問問題、看論壇也從不複製）
+function show(mode) {
+  $("menu").hidden = mode !== "menu";
+  $("edit").hidden = mode !== "edit";
+  $("hint").hidden = mode !== "edit";
+}
+
+// #menu（run 的那一頁）的四顆鈕：連上 Python 之前、等 Python 回來的時候是灰的
+function menuReady(on) {
+  for (const id of ["report", "idea", "qa", "forum"]) $(id).disabled = !on;
+}
+
+$("report").addEventListener("click", () => {
+  menuReady(false);
+  window.pywebview.api.start($("module").value).then((r) => {
+    $("notice").textContent = r.notice;
+    $("title").value = r.title;
+    $("body").value = r.body;
+    show("edit");
+    measure();  // .value 放進去不會觸發 input 事件：自己量一次，#full 換成這一份、最新的那一次回來，按鈕才亮
+  }).catch((e) => {
+    $("said").textContent = "打不開回報的那一頁：" + why(e);
+    menuReady(true);
+  });
+});
+
+// 提建議、問問題、看論壇：Python 那一頭開瀏覽器；開不成的話網址放在下面那一格，讓人自己複製
+function browse(call, done) {
+  menuReady(false);
+  call().then((r) => {
+    $("said").textContent = r.ok ? done : "瀏覽器打不開。把下面這串網址整個複製到瀏覽器的網址列。";
+    $("link").value = r.url;
+    $("link").hidden = !r.url;
+  }).catch((e) => {
+    $("said").textContent = "打不開：" + why(e);
+  }).finally(() => menuReady(true));
+}
+
+const ASKED = "已經在瀏覽器打開了。登入 GitHub、按 Start discussion 才會公開。";
+$("idea").addEventListener("click", () => browse(() => window.pywebview.api.go("IDEA"), ASKED));
+$("qa").addEventListener("click", () => browse(() => window.pywebview.api.go("QA"), ASKED));
+$("forum").addEventListener("click", () => browse(() => window.pywebview.api.open_forum(), "已經在瀏覽器打開了。"));
+
+show(data.mode);
+if (data.mode === "edit") {  // menu 的資料沒有這三個：等 start 回來才放
+  $("notice").textContent = data.notice;
+  $("title").value = data.title;
+  $("body").value = data.body;
+}
+for (const name of data.modules || []) {
+  const option = document.createElement("option");
+  option.value = name;
+  option.textContent = name;
+  $("module").append(option);
+}
+$("env").textContent = data.short_env || "";
+$("hint").textContent = data.hint;
+$("title").addEventListener("input", edited);
+$("body").addEventListener("input", edited);
+
+function connected() {
+  if (started) return;
+  started = true;
+  if (data.mode === "menu") menuReady(true); else measure();
+}
+if (window.pywebview && window.pywebview.api) connected(); else window.addEventListener("pywebviewready", connected);
+</script>
+</body>
+</html>
