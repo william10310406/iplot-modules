@@ -48,10 +48,17 @@ iPLoT 核心的更新不在這裡。核心在 `iplot-workshop`，上傳碰不到
 
 **上傳就是以 MIT 公開。** 表單有一格一定要勾：「這些程式是我寫的（或我有權這樣做），我以 MIT 授權公開…」。表單的必勾可以用 API 繞過，所以機器人收的時候會再核一次內文裡這一格；沒勾就不收。
 
-模組的 LICENSE 怎麼來：
+模組最上層的授權檔，機器人這樣處理（檔名不分大小寫）：
 
-- 模組最上層沒有 `LICENSE`、`LICENSE.md`、`LICENSE.txt`：機器人補一份 `LICENSE`，標準 MIT 全文，版權行是 `Copyright (c) <第一次上傳的年份> @<上傳者>`。
-- 有的話：去掉空白與版權那一行之後，要跟 MIT 全文一樣；不一樣（其他授權、空檔、亂寫的）就不收。工作坊只收 MIT 授權的模組。
+- **沒有：** 機器人補一份 `LICENSE`，標準 MIT 全文，版權行是 `Copyright (c) <第一次上傳的年份> <版權人>`。
+- **有：** 只認 `LICENSE`、`LICENSE.md`、`LICENSE.txt` 其中**一個**，而且要是檔案。兩個以上、名字叫 `LICENSE` 的資料夾、或其他像授權檔的名字（`LICENCE*`、`COPYING*`、`UNLICENSE*`、`COPYRIGHT*`、`LICENSE-*`、`LICENSE.<其他副檔名>`）一律不收：把它拿掉再傳，沒有的話機器人會自動補上。
+- **內容要是 MIT：** 「Permission is hereby granted」那一行之前，只准有空行、標題（`MIT License` 或 `The MIT License (MIT)`）、`SPDX-License-Identifier: MIT`、版權行（要有四位數的年份，版權人 100 字以內；`(c)`、`©` 都可以）。那一行起到檔尾要跟 MIT 全文一字不差：彎引號會當成直引號、每行開頭的 `#` 與多的空白不算；檔尾多出任何東西（包括版權行）都不收。
+
+**版權行怎麼來。** 版權人是 `@<上傳者的帳號>`；研究助理（帳號 id 是 71483597，也就是 william10310406 這個帳號）用「Wei-Heng Chien (簡偉恆)」。機器人用帳號 id 判斷，不看帳號名：別人改名成 william10310406 也得不到那個名字。
+
+**改別人的模組再上傳。** 收下的 LICENSE 裡如果沒有上傳者自己的版權行，機器人在最後一行版權行之後（沒有版權行就在標題之後）加一行 `Copyright (c) <年份> <版權人>`，回覆裡會說。原本的版權行**一行都不刪、不改**，所以原作者的名字會一直留著。
+
+**不能保證的。** 版權人那一欄裡可以寫任何字（100 字以內），機器人分不出那是不是真的版權人，也不判斷內容是不是抄來的；它只核格式與 MIT 全文。誰有權公開，以上傳者勾的那一格為準。
 
 收進來的那一筆在 `registry.json` 會有 `license: "MIT"` 與 `license_issue`（哪一次上傳），`index.json` 每一筆都帶 `license`。
 
@@ -69,7 +76,7 @@ iPLoT 核心的更新不在這裡。核心在 `iplot-workshop`，上傳碰不到
 | 不只一個 zip | 一次只能傳一個 zip。 |
 | 沒有勾確認 | 沒有勾「我知道…」：用表單重新開一個，勾了再送出。 |
 | 沒有勾授權 | 要勾『以 MIT 授權公開』才能收；用表單重新開一個。 |
-| LICENSE 不是 MIT | 模組裡的 LICENSE 不是 MIT；工作坊只收 MIT 授權的模組。 |
+| 授權檔不合規矩（不是 MIT、不只一份、資料夾叫 LICENSE、名字像授權檔） | zip 裡只能有一份授權檔，而且要是 MIT：把 〈name〉 拿掉再傳（沒有的話機器人會自動補上）。 |
 | 下載不到附件 | 下載不到附件（〈reason〉）。等一下再開一個新的。 |
 | zip 太大 | zip 超過 25 MB。 |
 | 不是 zip | 附件不是 zip。 |
@@ -123,7 +130,7 @@ iPLoT 核心的更新不在這裡。核心在 `iplot-workshop`，上傳碰不到
 - `zipcheck.py`：檢查 zip 的形狀、路徑、大小、檔名編碼。
 - `source.py`：讀 `iplot.py` 與 `CHANGELOG.md`，只讀不執行。
 - `registry.py`：`registry.json`，名字是誰的、版本、上限。
-- `licensing.py`：MIT 全文、核模組的 LICENSE、沒有就補一份。
+- `licensing.py`：MIT 全文、核模組的授權檔（只認一份）、沒有就補一份、沒有上傳者的版權行就加一行。
 - `build.py`：照 registry 打固定的 zip，寫 `index.json` 與 `index.html`。
 - `gh.py`：GitHub API 與下載附件（下載不帶 token）。
 - `say.py`：機器人的每一句話。名稱、帳號名、路徑一律放進程式碼格式。

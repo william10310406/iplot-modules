@@ -448,7 +448,7 @@ def test_may_publish_gets_the_whole_upload(repo, python310, tmp_path, monkeypatc
     assert (upload.name, upload.key, upload.version, upload.notes) == ("整理桌面", registry.key("整理桌面"), "0.1.1",
                                                                        "改了一點")
     expected = {"iplot.py": IPLOT_PY.encode(), "資料/a.txt": "內容".encode(),
-                "LICENSE": licensing.license_text("someone", 2026).encode()}
+                "LICENSE": licensing.license_text(222, "someone", 2026).encode()}
     assert [f.path for f in upload.files] == sorted(expected)
     for f in upload.files:
         assert f.size == len(expected[f.path]) and f.sha256 == hashlib.sha256(expected[f.path]).hexdigest()

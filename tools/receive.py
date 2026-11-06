@@ -245,13 +245,10 @@ def examine(issue: dict, form: gh.Form, zip_path: Path, zip_sha256: str, root: P
     checked = source.check_source(unpacked.folder, name, user_id, registry_data, python310)
     if isinstance(checked, Refusal):
         return checked
-    remarks: tuple[str, ...] = ()
-    if licensing.license_files(unpacked.files):
-        if licensing.refused(unpacked):
-            return refuse("bad_license")
-    else:
-        unpacked = licensing.add_license(unpacked, login, first_year(registry.key(name), received, now))
-        remarks = (licensing.REMARK_ADDED,)
+    licensed = licensing.apply(unpacked, user_id, login, first_year(registry.key(name), received, now))
+    if isinstance(licensed, Refusal):
+        return licensed
+    unpacked, remarks = licensed
     entry = registry_data.get(k)
     version = registry.version_for(entry, {f.path for f in unpacked.files}, unpacked.folder, form.notes)
     if isinstance(version, Refusal):
