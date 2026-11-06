@@ -9,6 +9,7 @@ import re
 import stat
 import unicodedata
 import zipfile
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from say import Refusal, refuse
 MAX_ENTRIES = 20000
 MAX_FILES = 2000
 MAX_UNPACKED = 100 * 1024 * 1024
+MAX_ORIGIN = 64 * 1024
 CHUNK = 64 * 1024
 WINDOWS_CHARS = set(':*?"<>|')
 GIT_SHORT = re.compile(r"git~[0-9]+", re.IGNORECASE)
@@ -38,6 +40,7 @@ class Unpacked:
     folder: Path
     files: tuple[File, ...]
     skipped: dict[str, int]
+    origin: bytes | None = None  # 模組最上層的 .origin（工作坊寫的來源記錄）；只讀來認原作者，不寫進 repo
 
 
 def skip_group(parts: list[str], info: zipfile.ZipInfo) -> str | None:
@@ -93,6 +96,18 @@ def conflict(entries: list[tuple[str, bool]]) -> str | None:
     return None
 
 
+def read_origin(z: zipfile.ZipFile, info: zipfile.ZipInfo) -> bytes | None:
+    """.origin 的內容；符號連結、太大、讀不了（壞的 zip 條目）都當作沒有，不拒收：它只是認原作者的一個來源。"""
+    if stat.S_ISLNK(info.external_attr >> 16) or info.file_size > MAX_ORIGIN:
+        return None
+    try:
+        with z.open(info) as src:
+            data = src.read(MAX_ORIGIN + 1)
+    except (zipfile.BadZipFile, RuntimeError, NotImplementedError, zlib.error, EOFError, OSError):
+        return None
+    return data if len(data) <= MAX_ORIGIN else None
+
+
 def inspect(zip_path: Path, staging: Path) -> Unpacked | Refusal:
     if not zipfile.is_zipfile(zip_path):
         return refuse("not_zip")
@@ -105,6 +120,7 @@ def inspect(zip_path: Path, staging: Path) -> Unpacked | Refusal:
         if len(infos) > MAX_ENTRIES:
             return refuse("too_many_entries")
         skipped: dict[str, int] = {}
+        origin: bytes | None = None
         kept: list[tuple[zipfile.ZipInfo, str, bool]] = []  # (info, NFC 路徑, 是不是目錄)
         for info in infos:
             path = unicodedata.normalize("NFC", info.filename)
@@ -114,6 +130,9 @@ def inspect(zip_path: Path, staging: Path) -> Unpacked | Refusal:
             group = skip_group(path.split("/"), info)
             if group:
                 skipped[group] = skipped.get(group, 0) + 1
+                parts = path.split("/")
+                if origin is None and len(parts) == 2 and parts[1].casefold() == ".origin" and not is_dir:
+                    origin = read_origin(z, info)
             else:
                 kept.append((info, path, is_dir))
         for _, path, _ in kept:
@@ -148,4 +167,4 @@ def inspect(zip_path: Path, staging: Path) -> Unpacked | Refusal:
             if size != info.file_size:
                 return refuse("broken", kind="宣告的大小跟內容不一樣")
             files.append(File(rel, size, digest.hexdigest()))
-    return Unpacked(name, folder, tuple(files), skipped)
+    return Unpacked(name, folder, tuple(files), skipped, origin)

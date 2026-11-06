@@ -16,6 +16,11 @@ body:
     attributes:
       label: 這一版改了什麼（選填）
       description: 模組裡有 CHANGELOG.md 的話以它為準，這裡不用寫。
+  - type: input
+    id: fork_of
+    attributes:
+      label: 改自工作坊的哪個模組（選填）
+      description: 改別人的模組再上傳時填它的名稱，原作者的版權行會保留。
   - type: checkboxes
     id: agree
     attributes:

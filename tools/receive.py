@@ -34,7 +34,7 @@ BOT_NAME = "iplot-modules 機器人"
 BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
 GIT_ENV = {"LC_ALL": "C", "GIT_TERMINAL_PROMPT": "0"}
 FILE_MODE = "100644"
-LICENSES = "licenses.json"  # {LICENSE 的 sha256: [[年份, 版權人], ...]}：機器人產生過的每一份，只增不刪
+LICENSES = "licenses.json"  # {LICENSE 的 sha256: [[年份, 顯示名, 帳號 id], ...]}：機器人產生過的每一份，只增不刪
 MAX_REASON = 500
 MAX_PER_RUN = 30
 GHOST_LOGIN = "ghost"
@@ -78,7 +78,7 @@ class Upload:
     attachment_url: str
     zip_sha256: str
     entry: dict | None
-    copyright: tuple = ()  # 這一版 LICENSE 的版權人 ((年份, 版權人), ...)；licensing.apply 算出來的
+    copyright: tuple = ()  # 這一版 LICENSE 的版權人 ((年份, 顯示名, 帳號 id), ...)；licensing.apply 算出來的
 
 
 def place(root: Path, unpacked: Unpacked) -> None:
@@ -131,7 +131,7 @@ def remember_license(root: Path, unpacked: Unpacked, upload: Upload) -> dict | N
     known = registry.read_json_strict(path) if path.exists() else {}
     if record.sha256 in known:
         return None
-    return {**known, record.sha256: [[year, who] for year, who in upload.copyright]}
+    return {**known, record.sha256: [list(item) for item in upload.copyright]}
 
 
 def write_in(root: Path, unpacked: Unpacked, upload: Upload, registry_data: dict, received: dict,
@@ -140,7 +140,7 @@ def write_in(root: Path, unpacked: Unpacked, upload: Upload, registry_data: dict
     try:
         place(root, unpacked)
         registry.record(registry_data, name, upload.user_id, upload.login, upload.version, upload.notes,
-                        upload.issue, today=now.strftime("%Y-%m-%d"), copyright=upload.copyright or None)
+                        upload.issue, today=now.strftime("%Y-%m-%d"), copyright=[list(item) for item in upload.copyright] or None)
         known = remember_license(root, unpacked, upload)
         received[str(upload.issue)] = {"name": name, "version": upload.version, "owner_id": upload.user_id,
                                        "at": now.strftime(registry.AT)}
@@ -258,21 +258,21 @@ def examine(issue: dict, form: gh.Form, zip_path: Path, zip_sha256: str, root: P
         return checked
     entry = registry_data.get(k)
     licensed = licensing.apply(unpacked, user_id, login, now.year, (entry or {}).get("copyright", []), licenses,
-                               registry_data)
+                               registry_data, form.fork_of)
     if isinstance(licensed, Refusal):
         return licensed
-    unpacked, remarks, copyright = licensed
+    unpacked, copyright = licensed
     version = registry.version_for(entry, {f.path for f in unpacked.files}, unpacked.folder, form.notes)
     if isinstance(version, Refusal):
         return version
     upload = Upload(issue=issue["number"], user_id=user_id, login=login, name=name, key=k, version=version.version,
                     notes=version.notes, files=unpacked.files, attachment_url=form.attachments[0],
                     zip_sha256=zip_sha256, entry=None if entry is None else dict(entry),
-                    copyright=tuple((year, who) for year, who in copyright))
+                    copyright=tuple(tuple(item) for item in copyright))
     ok, reason = may_publish(upload)
     if not ok:
         return refuse("held", reason=reason)
-    return Accepted(upload, unpacked, checked.remarks + version.remarks + remarks)
+    return Accepted(upload, unpacked, checked.remarks + version.remarks)
 
 
 @dataclass(frozen=True)
@@ -324,7 +324,7 @@ def handle(issue: dict, root: Path, now: datetime, python310: str, fetch=gh.fetc
     pushed = push(root)
     if pushed.kind == "ok":
         reply = received_reply(upload.name, upload.version, [f.path for f in upload.files], unpacked.skipped,
-                               result.remarks)
+                               result.remarks, licensing.lines_of(upload.copyright))
         return Outcome("published", reply, upload)
     rollback(root, upload.name)
     if pushed.kind == "blocked":

@@ -30,6 +30,7 @@ REQUEST_TIMEOUT = 30
 
 HEADING_ZIP = "模組的 zip"
 HEADING_NOTES = "這一版改了什麼（選填）"
+HEADING_FORK = "改自工作坊的哪個模組（選填）"
 HEADING_AGREE = "確認"
 AGREE_TEXT = "我知道上傳的東西誰都看得到、誰都能下載執行；收到之後，這個名字只有我的帳號能更新。"
 HEADING_LICENSE = "授權"
@@ -62,6 +63,7 @@ class Form:
     notes: str
     agreed: bool
     licensed: bool = False
+    fork_of: str = ""  # 表單的 fork_of 那一格：改自工作坊的哪個模組（沒填是 ""）
 
 
 def parse_body(body: str | None) -> Form:
@@ -81,13 +83,17 @@ def parse_body(body: str | None) -> Form:
 
     section = lines[zip_at + 1:notes_at]
     attachments = tuple(u for u in _urls(section) if ATTACHMENT_RE.fullmatch(u))
-    text = "\n".join(lines[notes_at + 1:agree_at]).strip()
+    # 「改自哪個模組」夾在 notes 與「確認」之間；取最後一個（notes 是上傳的人寫的，裡面的 ### 行不算）。舊表單沒有這一節
+    fork_at = next((i for i in reversed(heading_at(HEADING_FORK)) if notes_at < i < agree_at), None)
+    text = "\n".join(lines[notes_at + 1:agree_at if fork_at is None else fork_at]).strip()
+    fork_of = "" if fork_at is None else "\n".join(lines[fork_at + 1:agree_at]).strip()
     # 授權那一節在「確認」後面；沒有那個標題（用 API 開的、內文根本沒有那一格）就是沒勾
     license_at = next((i for i in heading_at(HEADING_LICENSE) if i > agree_at), None)
     agree_end = len(lines) if license_at is None else license_at
     agreed = _checked(lines[agree_at + 1:agree_end], AGREE_TEXT)
     licensed = license_at is not None and _checked(lines[license_at + 1:], LICENSE_TEXT)
-    return Form(attachments, "" if text == NO_RESPONSE else text, agreed, licensed)
+    return Form(attachments, "" if text == NO_RESPONSE else text, agreed, licensed,
+                "" if fork_of == NO_RESPONSE else fork_of)
 
 
 def _checked(lines: list[str], label: str) -> bool:

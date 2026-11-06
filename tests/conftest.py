@@ -117,15 +117,17 @@ DEFAULT_ATTACHMENT = "https://github.com/user-attachments/files/33695492/default
 
 
 def form_body(url: str | None = DEFAULT_ATTACHMENT, *, more_urls=(), notes: str = "_No response_",
-              agreed: bool = True, licensed: bool | None = True) -> str:
+              agreed: bool = True, licensed: bool | None = True, fork_of: str | None = None) -> str:
     """照 tests/fixtures/issue-body.md 的樣子組表單送出之後的內文：附件是一行 [原檔名](網址)，沒傳是 _No response_。"""
-    from gh import AGREE_TEXT, HEADING_LICENSE, LICENSE_TEXT
+    from gh import AGREE_TEXT, HEADING_FORK, HEADING_LICENSE, LICENSE_TEXT
 
     links = [f"[整理桌面.zip]({u})" for u in ([url] if url else []) + list(more_urls)]
     box = "x" if agreed else " "
     return (f"### 模組的 zip\n\n{chr(10).join(links) if links else '_No response_'}\n\n"
             f"### 這一版改了什麼（選填）\n\n{notes}\n\n"
-            f"### 確認\n\n- [{box}] {AGREE_TEXT}"
+            # fork_of=None：內文根本沒有那一節（舊的表單）；"" 是有那一節、沒填（_No response_）
+            + ("" if fork_of is None else f"### {HEADING_FORK}\n\n{fork_of or '_No response_'}\n\n")
+            + f"### 確認\n\n- [{box}] {AGREE_TEXT}"
             # licensed=None：內文根本沒有授權那一格（用 API 開的）
             + ("" if licensed is None else f"\n\n### {HEADING_LICENSE}\n\n- [{'x' if licensed else ' '}] {LICENSE_TEXT}"))
 
