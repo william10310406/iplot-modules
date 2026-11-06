@@ -699,3 +699,23 @@ def test_no_module_in_the_repo_has_a_standard_license_name_besides_license():
     for folder in (ROOT / "modules").iterdir():
         paths = [p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()]
         assert licensing.standard_license_name(paths) is None, folder.name
+
+
+@pytest.mark.parametrize("stuck_n, other_n", [(2, 3), (3, 2)], ids=["stuck-first", "stuck-last"])
+def test_a_stuck_upload_does_not_stop_the_others_in_the_same_run(repo, python310, tmp_path, stuck_n, other_n):
+    """版權人清單壞掉（BadCopyright）的那一份卡住；同一輪裡別人的上傳照樣收進去，不整輪停下來。"""
+    upload(repo, python310, tmp_path, 1)
+    data = registry.read_json_strict(repo / "registry.json")
+    data[registry.key("整理桌面")]["copyright"] = [[2026, "@someone (GitHub user 222)"]]
+    seed(repo, data)
+    api = FakeApi([up(stuck_n), up(other_n, login="other", user_id=333, body=form_body(att(other_n)))])
+    zips = {att(stuck_n): module_zip(tmp_path, iplot='"""說明"""\n# 新的一版\n'),
+            att(other_n): module_zip(tmp_path, "別的")}
+    assert run(repo, api, zips, python310) == 0
+    assert api.comments[stuck_n] == [SAY["stuck"]]
+    assert api.patches.count((stuck_n, {"labels": ["卡住"]})) == 1
+    assert (other_n, PUBLISHED) in api.patches
+    assert str(stuck_n) not in received(repo) and str(other_n) in received(repo)
+    assert folder_of(repo, "別的").is_dir()
+    assert entry_of(repo, "別的")["copyright"] == [person("other", 333)]
+    assert git(repo, "status", "--porcelain") == ""
