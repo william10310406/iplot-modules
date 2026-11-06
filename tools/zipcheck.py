@@ -64,7 +64,7 @@ def skip_group(parts: list[str], info: zipfile.ZipInfo) -> str | None:
 def bad_path(rel: str) -> bool:
     if not rel or rel.startswith("/") or "\\" in rel:
         return True
-    if any(unicodedata.category(c) == "Cc" or c in WINDOWS_CHARS for c in rel):
+    if any(unicodedata.category(c) in ("Cc", "Cf") or c in WINDOWS_CHARS for c in rel):
         return True
     return any(not seg or seg == ".." or seg.endswith((".", " ")) or seg.split(".")[0].upper() in RESERVED
                or GIT_SHORT.fullmatch(seg) for seg in rel.split("/"))

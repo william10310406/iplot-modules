@@ -48,19 +48,19 @@ iPLoT 核心的更新不在這裡。核心在 `iplot-workshop`，上傳碰不到
 
 **上傳就是以 MIT 公開。** 表單有一格一定要勾：「這些程式是我寫的（或我有權這樣做），我以 MIT 授權公開…」。表單的必勾可以用 API 繞過，所以機器人收的時候會再核一次內文裡這一格；沒勾就不收。
 
-模組最上層的授權檔，機器人這樣處理（檔名不分大小寫）：
+**機器人不讀你寫的授權文字。** LICENSE 一律由機器人產生，zip 裡的 LICENSE 不會寫進 repo：
 
-- **沒有：** 機器人補一份 `LICENSE`，標準 MIT 全文，版權行是 `Copyright (c) <第一次上傳的年份> <版權人>`。
-- **有：** 只認 `LICENSE`、`LICENSE.md`、`LICENSE.txt` 其中**一個**，而且要是檔案。兩個以上、名字叫 `LICENSE` 的資料夾、或其他像授權檔的名字（`LICENCE*`、`COPYING*`、`UNLICENSE*`、`COPYRIGHT*`、`LICENSE-*`、`LICENSE.<其他副檔名>`）一律不收：把它拿掉再傳，沒有的話機器人會自動補上。
-- **內容要是 MIT：** 「Permission is hereby granted」那一行之前，只准有空行、標題（`MIT License` 或 `The MIT License (MIT)`）、`SPDX-License-Identifier: MIT`、版權行（要有四位數的年份，版權人 100 字以內；`(c)`、`©` 都可以）。那一行起到檔尾要跟 MIT 全文一字不差：彎引號會當成直引號、每行開頭的 `#` 與多的空白不算；檔尾多出任何東西（包括版權行）都不收。
+- **版權人記在 `registry.json`。** 每個模組有一個 `copyright`：`[[年份, 版權人], ...]`，只增不刪，依加入的先後排。版權人是 `@<上傳者第一次加入時的帳號>`；研究助理（帳號 id 71483597，也就是 william10310406 這個帳號）用「Wei-Heng Chien (簡偉恆)」。機器人用帳號 id 判斷，不看帳號名：別人改名成 william10310406 也得不到那個名字。每次上傳，上傳者不在清單裡就加一筆（年份是上傳那一年）；改版時清單只會變長，舊的版權人不會消失。
+- **LICENSE 照固定格式產生：** `MIT License`、每個版權人一行 `Copyright (c) <年份> <版權人>`、MIT 全文。同樣的清單，產生出來的位元組一模一樣。產生過的每一份，雜湊記在 `licenses.json`。
+- **自己寫的模組：** zip 裡不用放 LICENSE，機器人會補。
+- **改工作坊裡別人的模組再上傳：** 把原模組的 `LICENSE` **原樣**放進 zip（最上層的 `LICENSE`、`LICENSE.md`、`LICENSE.txt` 其中一個）。機器人算它的 sha256，在 `licenses.json` 裡找得到，就把那一份的版權人併進來，再加上你；回覆會說「LICENSE 跟「〈最早用那份 LICENSE 的模組〉」的一樣，原作者的版權行已保留。」改過一個字都不算，找不到就不收。
+- **改工作坊以外的 MIT 程式：** 把原作者的授權聲明寫在那個程式檔開頭的註解裡；不要把對方的 LICENSE 放進來。
+- **像授權的檔一律不收：** zip 裡（不只最上層）檔名或資料夾名，NFKC 與 casefold 之後含 `licen`、`copying`、`gpl`、`notice`、`eula`、`unlicense`，或是有名叫 `licenses` 的資料夾，除了最上層那一個 `LICENSE`、`LICENSE.md`、`LICENSE.txt`，都不收（`LICENSE_GPL`、`LICENSES/`、`GPL-3.0.txt`、`NOTICE`、`EULA.txt`、全形字都是）。最上層有兩個以上這種檔，或 `LICENSE` 是資料夾，也是這一句。用到別人的套件請寫在 `REQUIRES`，用 pip 裝，不要整份放進來。模組資料夾自己的名字不在這條裡。
+- **看不見的格式字元：** 路徑裡有零寬字元、方向控制字元這類（Unicode 類別 Cf，例如 U+200B、U+202E、U+2066）的檔一律不收，不限授權檔。
 
-**版權行怎麼來。** 版權人是 `@<上傳者的帳號>`；研究助理（帳號 id 是 71483597，也就是 william10310406 這個帳號）用「Wei-Heng Chien (簡偉恆)」。機器人用帳號 id 判斷，不看帳號名：別人改名成 william10310406 也得不到那個名字。
+**不能保證的。** 寫在程式註解或 README 裡的條款，機器人不讀，也不判斷內容是不是抄來的；誰有權公開，以上傳者勾的那一格為準。機器人只保證 LICENSE 是它產生的那一份、版權人只增不減。
 
-**改別人的模組再上傳。** 收下的 LICENSE 裡如果沒有上傳者自己的版權行，機器人在最後一行版權行之後（沒有版權行就在標題之後）加一行 `Copyright (c) <年份> <版權人>`，回覆裡會說。原本的版權行**一行都不刪、不改**，所以原作者的名字會一直留著。
-
-**不能保證的。** 版權人那一欄裡可以寫任何字（100 字以內），機器人分不出那是不是真的版權人，也不判斷內容是不是抄來的；它只核格式與 MIT 全文。誰有權公開，以上傳者勾的那一格為準。
-
-收進來的那一筆在 `registry.json` 會有 `license: "MIT"` 與 `license_issue`（哪一次上傳），`index.json` 每一筆都帶 `license`。
+收進來的那一筆在 `registry.json` 會有 `license: "MIT"`、`license_issue`（哪一次上傳）與 `copyright`，`index.json` 每一筆都帶 `license`。
 
 **為什麼有些舊模組有紅字：** 授權選項出現之前上傳的模組（`registry.json` 裡沒有 `license` 的那幾筆），清單上會寫「上傳時還沒有授權選項；要改或再分享，先問上傳者。」它們不是 MIT，只是還沒問過；上傳者再傳一次新版（勾了授權）紅字就沒了。手動寫的 `warning` 優先，不會被這一句蓋掉。
 
@@ -76,7 +76,8 @@ iPLoT 核心的更新不在這裡。核心在 `iplot-workshop`，上傳碰不到
 | 不只一個 zip | 一次只能傳一個 zip。 |
 | 沒有勾確認 | 沒有勾「我知道…」：用表單重新開一個，勾了再送出。 |
 | 沒有勾授權 | 要勾『以 MIT 授權公開』才能收；用表單重新開一個。 |
-| 授權檔不合規矩（不是 MIT、不只一份、資料夾叫 LICENSE、名字像授權檔） | zip 裡只能有一份授權檔，而且要是 MIT：把 〈name〉 拿掉再傳（沒有的話機器人會自動補上）。 |
+| 有像授權的檔 | zip 裡有像授權的檔：〈path〉。工作坊的模組一律 MIT，只能有機器人產生的那一份 LICENSE；用到別人的套件請寫在 REQUIRES，用 pip 裝，不要整份放進來。 |
+| LICENSE 不是工作坊產生的 | zip 裡的 LICENSE 不是工作坊產生的。改自工作坊的模組：LICENSE 保持原樣，不要改；自己寫的模組：把 LICENSE 拿掉，機器人會自動補上。改自工作坊以外的 MIT 程式：把原作者的授權聲明寫在那個程式檔開頭的註解裡。 |
 | 下載不到附件 | 下載不到附件（〈reason〉）。等一下再開一個新的。 |
 | zip 太大 | zip 超過 25 MB。 |
 | 不是 zip | 附件不是 zip。 |
@@ -130,7 +131,7 @@ iPLoT 核心的更新不在這裡。核心在 `iplot-workshop`，上傳碰不到
 - `zipcheck.py`：檢查 zip 的形狀、路徑、大小、檔名編碼。
 - `source.py`：讀 `iplot.py` 與 `CHANGELOG.md`，只讀不執行。
 - `registry.py`：`registry.json`，名字是誰的、版本、上限。
-- `licensing.py`：MIT 全文、核模組的授權檔（只認一份）、沒有就補一份、沒有上傳者的版權行就加一行。
+- `licensing.py`：MIT 全文、依 `registry.json` 的版權人清單產生 LICENSE、認 `licenses.json` 裡的雜湊（改別人的模組）、擋像授權的檔。不解讀任何上傳的授權文字。
 - `build.py`：照 registry 打固定的 zip，寫 `index.json` 與 `index.html`。
 - `gh.py`：GitHub API 與下載附件（下載不帶 token）。
 - `say.py`：機器人的每一句話。名稱、帳號名、路徑一律放進程式碼格式。

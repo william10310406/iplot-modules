@@ -23,7 +23,11 @@ SAY: dict[str, str] = {
     "many_zips": "一次只能傳一個 zip。",
     "not_agreed": "沒有勾「我知道…」：用表單重新開一個，勾了再送出。",
     "not_licensed": "要勾『以 MIT 授權公開』才能收；用表單重新開一個。",
-    "bad_license": "zip 裡只能有一份授權檔，而且要是 MIT：把 {name} 拿掉再傳（沒有的話機器人會自動補上）。",
+    "license_like": "zip 裡有像授權的檔：{path}。工作坊的模組一律 MIT，只能有機器人產生的那一份 LICENSE；"
+                    "用到別人的套件請寫在 REQUIRES，用 pip 裝，不要整份放進來。",
+    "license_unknown": "zip 裡的 LICENSE 不是工作坊產生的。改自工作坊的模組：LICENSE 保持原樣，不要改；"
+                       "自己寫的模組：把 LICENSE 拿掉，機器人會自動補上。改自工作坊以外的 MIT 程式："
+                       "把原作者的授權聲明寫在那個程式檔開頭的註解裡。",
     "download": "下載不到附件（{reason}）。等一下再開一個新的。",
     "too_big": "zip 超過 25 MB。",
     "not_zip": "附件不是 zip。",

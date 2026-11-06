@@ -204,6 +204,7 @@ def repo(tmp_path) -> Path:
     git(work, "config", "core.ignorecase", "false")
     (work / "registry.json").write_text("{}\n", encoding="utf-8")
     (work / "received.json").write_text("{}\n", encoding="utf-8")
+    (work / "licenses.json").write_text("{}\n", encoding="utf-8")
     (work / "notice.txt").write_text("歡迎\n", encoding="utf-8")
     (work / ".gitignore").write_text("*.log\n", encoding="utf-8")
     git(work, "add", "-A")
