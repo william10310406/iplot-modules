@@ -57,7 +57,8 @@ def test_first_upload_takes_the_name():
     assert owner_refusal("新東西", ME, reg) is None
     record(reg, "新東西", ME, "me", "0.0.1", "", 7, "2026-10-21")
     assert reg[key("新東西")] == {"name": "新東西", "owner_id": ME, "owner": "me", "version": "0.0.1",
-                                 "notes": "", "issue": 7, "updated": "2026-10-21"}
+                                 "notes": "", "issue": 7, "updated": "2026-10-21",
+                                 "license": "MIT", "license_issue": 7}
 
 
 def test_same_id_updates():
@@ -133,7 +134,16 @@ def test_bot_writes_only_its_own_fields():
     record(reg, "整理桌面", 111, "renamed", "0.0.2", "n", 9, "2026-10-21")
     after = reg[key("整理桌面")]
     changed = {k for k in before.keys() | after.keys() if before.get(k) != after.get(k)}
-    assert changed == {"owner", "version", "notes", "issue", "updated"}
+    assert changed == {"owner", "version", "notes", "issue", "updated", "license", "license_issue"}
+
+
+def test_update_keeps_every_field_it_does_not_write():
+    reg = make_registry()
+    reg[key("整理桌面")].update(warning="小心", license="MIT", license_issue=3, extra="手動加的")
+    record(reg, "整理桌面", 111, "someone", "0.0.2", "n", 9, "2026-10-21")
+    after = reg[key("整理桌面")]
+    assert after["warning"] == "小心" and after["extra"] == "手動加的"
+    assert (after["license"], after["license_issue"]) == ("MIT", 9)
 
 
 @pytest.mark.parametrize("name, kind", [

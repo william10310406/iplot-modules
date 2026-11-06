@@ -120,7 +120,7 @@ def test_index_has_empty_modules_and_reads_with_read_listing(tmp_path):
     assert [u["name"] for u in uploads] == ["整理桌面"]
     assert notice == NOTICE
     assert set(index["uploads"][0]) == {"name", "version", "zip_url", "sha256", "description", "icon", "notes",
-                                        "author"}
+                                        "author", "license", "warning"}
 
 
 def test_old_workshop_sees_an_empty_list(tmp_path):
@@ -263,8 +263,34 @@ def test_warning_is_copied_only_when_a_string(tmp_path):
     _, index = built(tmp_path, entries)
     uploads = {u["name"]: u for u in index["uploads"]}
     assert uploads["有"]["warning"] == "被檢舉了"
-    for name in ("數字", "空的", "空值"):
-        assert "warning" not in uploads[name]
+    for name in ("數字", "空的", "空值"):  # 不是字串的 warning 不算手動設的：沒有授權的這幾筆帶預設那一句
+        assert uploads[name]["warning"] == build.NO_LICENSE_WARNING
+
+
+def test_license_goes_into_every_entry(tmp_path):
+    _, index = built(tmp_path, [entry("有", license="MIT", license_issue=3), entry("沒有")])
+    uploads = {u["name"]: u for u in index["uploads"]}
+    assert uploads["有"]["license"] == "MIT" and "warning" not in uploads["有"]
+    assert uploads["沒有"]["license"] is None
+
+
+def test_no_license_gets_the_default_warning(tmp_path):
+    _, index = built(tmp_path, [entry("沒有")])
+    assert index["uploads"][0]["warning"] == "上傳時還沒有授權選項；要改或再分享，先問上傳者。"
+
+
+def test_manual_warning_wins_over_the_license_warning(tmp_path):
+    _, index = built(tmp_path, [entry("沒有", warning="被檢舉了")])
+    assert index["uploads"][0]["warning"] == "被檢舉了"
+
+
+def test_index_with_license_still_reads_with_the_workshop_copies(tmp_path):
+    site, index = built(tmp_path, [entry("有", license="MIT"), entry("沒有")])
+    uploads, _ = read_listing(index)
+    assert {u["name"]: u["license"] for u in uploads} == {"有": "MIT", "沒有": None}
+    assert [u["name"] for u in workshop_051.read_index((site / "index.json").as_uri())] == []
+    html_text = (site / "index.html").read_text(encoding="utf-8")
+    assert "授權：MIT" in html_text and build.NO_LICENSE_WARNING in html_text
 
 
 def test_author_is_the_current_login_with_fallbacks(tmp_path):

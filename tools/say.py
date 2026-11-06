@@ -22,6 +22,8 @@ SAY: dict[str, str] = {
     "no_zip": "沒有找到 zip：把模組資料夾壓成 .zip，拖進「模組的 zip」那一格。",
     "many_zips": "一次只能傳一個 zip。",
     "not_agreed": "沒有勾「我知道…」：用表單重新開一個，勾了再送出。",
+    "not_licensed": "要勾『以 MIT 授權公開』才能收；用表單重新開一個。",
+    "bad_license": "模組裡的 LICENSE 不是 MIT；工作坊只收 MIT 授權的模組。",
     "download": "下載不到附件（{reason}）。等一下再開一個新的。",
     "too_big": "zip 超過 25 MB。",
     "not_zip": "附件不是 zip。",

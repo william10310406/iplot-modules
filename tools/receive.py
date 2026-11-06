@@ -22,6 +22,7 @@ from typing import Literal
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import gh  # noqa: E402
+import licensing  # noqa: E402
 import registry  # noqa: E402
 import source  # noqa: E402
 import zipcheck  # noqa: E402
@@ -220,6 +221,12 @@ class Accepted:
     remarks: tuple[str, ...]
 
 
+def first_year(k: str, received: dict, now: datetime) -> int:
+    """這個名字第一次上傳的年份（received.json 記著每一份的時間）；沒有紀錄就是今年。"""
+    years = [int(e["at"][:4]) for e in received.values() if registry.key(e.get("name", "")) == k and "at" in e]
+    return min(years, default=now.year)
+
+
 def examine(issue: dict, form: gh.Form, zip_path: Path, zip_sha256: str, root: Path, registry_data: dict,
             received: dict, now: datetime, python310: str, staging: Path) -> Accepted | Refusal:
     """設計第 5.2 節第 4–9 步，照順序；哪一步不過就回那一句。"""
@@ -238,6 +245,13 @@ def examine(issue: dict, form: gh.Form, zip_path: Path, zip_sha256: str, root: P
     checked = source.check_source(unpacked.folder, name, user_id, registry_data, python310)
     if isinstance(checked, Refusal):
         return checked
+    remarks: tuple[str, ...] = ()
+    if licensing.license_files(unpacked.files):
+        if licensing.refused(unpacked):
+            return refuse("bad_license")
+    else:
+        unpacked = licensing.add_license(unpacked, login, first_year(registry.key(name), received, now))
+        remarks = (licensing.REMARK_ADDED,)
     entry = registry_data.get(k)
     version = registry.version_for(entry, {f.path for f in unpacked.files}, unpacked.folder, form.notes)
     if isinstance(version, Refusal):
@@ -248,7 +262,7 @@ def examine(issue: dict, form: gh.Form, zip_path: Path, zip_sha256: str, root: P
     ok, reason = may_publish(upload)
     if not ok:
         return refuse("held", reason=reason)
-    return Accepted(upload, unpacked, checked.remarks + version.remarks)
+    return Accepted(upload, unpacked, checked.remarks + version.remarks + remarks)
 
 
 @dataclass(frozen=True)

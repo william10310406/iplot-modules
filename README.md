@@ -13,7 +13,7 @@ iPLoT 核心的更新不在這裡。核心在 `iplot-workshop`，上傳碰不到
 ## 怎麼上傳
 
 1. 在 Finder 對著模組的資料夾按右鍵，選「壓縮」。
-2. 打開[「上傳模組」表單](https://github.com/william10310406/iplot-modules/issues/new?template=%E4%B8%8A%E5%82%B3%E6%A8%A1%E7%B5%84.yml)，把 zip 拖進去，勾「我知道…」，送出。
+2. 打開[「上傳模組」表單](https://github.com/william10310406/iplot-modules/issues/new?template=%E4%B8%8A%E5%82%B3%E6%A8%A1%E7%B5%84.yml)，把 zip 拖進去，勾「我知道…」和「以 MIT 授權公開」，送出。
 3. 一兩分鐘後，看那個 issue 的回覆。收到了就會寫「收到了」，issue 關掉；沒收就會用一句話說哪裡不對。改好再開一個新的。
 
 再過幾分鐘，在 iPLoT 按「工作坊」，清單上就有你的模組，底下一行寫上傳者。
@@ -42,6 +42,21 @@ iPLoT 核心的更新不在這裡。核心在 `iplot-workshop`，上傳碰不到
   - `modules/` 到 800 MB 之後，不收新的名字。
 - 機器人只讀不執行：上傳的東西只會被解壓、檢查語法、寫進 repo，一行都不會跑。
 
+## 授權
+
+這個 repo 的程式（機器人與工具）以 MIT 授權公開，見 [LICENSE](LICENSE)。
+
+**上傳就是以 MIT 公開。** 表單有一格一定要勾：「這些程式是我寫的（或我有權這樣做），我以 MIT 授權公開…」。表單的必勾可以用 API 繞過，所以機器人收的時候會再核一次內文裡這一格；沒勾就不收。
+
+模組的 LICENSE 怎麼來：
+
+- 模組最上層沒有 `LICENSE`、`LICENSE.md`、`LICENSE.txt`：機器人補一份 `LICENSE`，標準 MIT 全文，版權行是 `Copyright (c) <第一次上傳的年份> @<上傳者>`。
+- 有的話：去掉空白與版權那一行之後，要跟 MIT 全文一樣；不一樣（其他授權、空檔、亂寫的）就不收。工作坊只收 MIT 授權的模組。
+
+收進來的那一筆在 `registry.json` 會有 `license: "MIT"` 與 `license_issue`（哪一次上傳），`index.json` 每一筆都帶 `license`。
+
+**為什麼有些舊模組有紅字：** 授權選項出現之前上傳的模組（`registry.json` 裡沒有 `license` 的那幾筆），清單上會寫「上傳時還沒有授權選項；要改或再分享，先問上傳者。」它們不是 MIT，只是還沒問過；上傳者再傳一次新版（勾了授權）紅字就沒了。手動寫的 `warning` 優先，不會被這一句蓋掉。
+
 ## 沒收的原因
 
 機器人沒收的時候，會在 issue 裡說下面的其中一句。〈〉裡是機器人填進去的字。
@@ -53,6 +68,8 @@ iPLoT 核心的更新不在這裡。核心在 `iplot-workshop`，上傳碰不到
 | 沒有 zip | 沒有找到 zip：把模組資料夾壓成 .zip，拖進「模組的 zip」那一格。 |
 | 不只一個 zip | 一次只能傳一個 zip。 |
 | 沒有勾確認 | 沒有勾「我知道…」：用表單重新開一個，勾了再送出。 |
+| 沒有勾授權 | 要勾『以 MIT 授權公開』才能收；用表單重新開一個。 |
+| LICENSE 不是 MIT | 模組裡的 LICENSE 不是 MIT；工作坊只收 MIT 授權的模組。 |
 | 下載不到附件 | 下載不到附件（〈reason〉）。等一下再開一個新的。 |
 | zip 太大 | zip 超過 25 MB。 |
 | 不是 zip | 附件不是 zip。 |
@@ -106,6 +123,7 @@ iPLoT 核心的更新不在這裡。核心在 `iplot-workshop`，上傳碰不到
 - `zipcheck.py`：檢查 zip 的形狀、路徑、大小、檔名編碼。
 - `source.py`：讀 `iplot.py` 與 `CHANGELOG.md`，只讀不執行。
 - `registry.py`：`registry.json`，名字是誰的、版本、上限。
+- `licensing.py`：MIT 全文、核模組的 LICENSE、沒有就補一份。
 - `build.py`：照 registry 打固定的 zip，寫 `index.json` 與 `index.html`。
 - `gh.py`：GitHub API 與下載附件（下載不帶 token）。
 - `say.py`：機器人的每一句話。名稱、帳號名、路徑一律放進程式碼格式。

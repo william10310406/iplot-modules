@@ -3,7 +3,8 @@
 registry.json 的鍵一律是 key(name)（NFC＋casefold）；每一筆的形狀：
 保留 {"name", "reserved": true}；種子 {"name", "owner_id", "owner"}（沒有 version）；
 一般 {"name", "owner_id", "owner", "version", "notes", "issue", "updated"}；手動加的 removed、warning 可以出現在任何一筆。
-機器人只寫 owner、version、notes、issue、updated，其他欄一律不動。
+機器人只寫 owner、version、notes、issue、updated、license、license_issue，其他欄一律不動（更新時是逐欄寫、不是整筆重寫）。
+license 是 "MIT"（上傳時勾了、LICENSE 也核過），license_issue 是那一次上傳的 issue 編號；沒有 license 的是表單還沒有授權選項時的舊上傳。
 """
 
 import json
@@ -206,3 +207,5 @@ def record(registry: dict, name: str, uploader_id: int, login: str, version: str
     entry["notes"] = notes
     entry["issue"] = issue
     entry["updated"] = today
+    entry["license"] = "MIT"
+    entry["license_issue"] = issue

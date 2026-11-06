@@ -38,8 +38,9 @@ def test_parse_the_real_issue_body():
 def test_parse_the_real_bodies_with_space_and_parens(n, url):
     # 補探第 9 項的真內文：#5 傳「整理桌面 2.zip」、#6 傳「x (1).zip」；GitHub 把空白、括號、非 ASCII 拿掉或換成 .，沒有包 <…>
     form = gh.parse_body((FIXTURES / f"issue-body-{n}.md").read_text(encoding="utf-8"))
-    assert form == gh.Form((url,), "", True)
-    assert gh.form_refusal(form) is None
+    # 這兩份是授權那一格出現之前的內文：沒有授權的標題，就是沒勾
+    assert form == gh.Form((url,), "", True, False)
+    assert gh.form_refusal(form).key == "not_licensed"
 
 
 @pytest.mark.parametrize("url", REAL_URLS)

@@ -32,6 +32,8 @@ HEADING_ZIP = "模組的 zip"
 HEADING_NOTES = "這一版改了什麼（選填）"
 HEADING_AGREE = "確認"
 AGREE_TEXT = "我知道上傳的東西誰都看得到、誰都能下載執行；收到之後，這個名字只有我的帳號能更新。"
+HEADING_LICENSE = "授權"
+LICENSE_TEXT = "這些程式是我寫的（或我有權這樣做），我以 MIT 授權公開：任何人都能使用、修改、再散佈，只要保留授權聲明。"
 NO_RESPONSE = "_No response_"
 
 # 補探第 9 項（#5、#6）：GitHub 寫進內文的附件網址，檔名只剩 ASCII（非 ASCII 拿掉，空白、括號變成 .）。
@@ -59,6 +61,7 @@ class Form:
     attachments: tuple[str, ...]
     notes: str
     agreed: bool
+    licensed: bool = False
 
 
 def parse_body(body: str | None) -> Form:
@@ -79,9 +82,17 @@ def parse_body(body: str | None) -> Form:
     section = lines[zip_at + 1:notes_at]
     attachments = tuple(u for u in _urls(section) if ATTACHMENT_RE.fullmatch(u))
     text = "\n".join(lines[notes_at + 1:agree_at]).strip()
-    boxes = {f"- [{mark}] {AGREE_TEXT}" for mark in "xX"}
-    agreed = any(line.rstrip() in boxes for line in lines[agree_at + 1:])
-    return Form(attachments, "" if text == NO_RESPONSE else text, agreed)
+    # 授權那一節在「確認」後面；沒有那個標題（用 API 開的、內文根本沒有那一格）就是沒勾
+    license_at = next((i for i in heading_at(HEADING_LICENSE) if i > agree_at), None)
+    agree_end = len(lines) if license_at is None else license_at
+    agreed = _checked(lines[agree_at + 1:agree_end], AGREE_TEXT)
+    licensed = license_at is not None and _checked(lines[license_at + 1:], LICENSE_TEXT)
+    return Form(attachments, "" if text == NO_RESPONSE else text, agreed, licensed)
+
+
+def _checked(lines: list[str], label: str) -> bool:
+    boxes = {f"- [{mark}] {label}" for mark in "xX"}
+    return any(line.rstrip() in boxes for line in lines)
 
 
 def _urls(lines: list[str]) -> list[str]:
@@ -142,6 +153,8 @@ def form_refusal(form: Form) -> Refusal | None:
         return refuse("many_zips")
     if not form.agreed:
         return refuse("not_agreed")
+    if not form.licensed:
+        return refuse("not_licensed")
     return None
 
 
