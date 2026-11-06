@@ -3,7 +3,10 @@
 registry.json 的鍵一律是 key(name)（NFC＋casefold）；每一筆的形狀：
 保留 {"name", "reserved": true}；種子 {"name", "owner_id", "owner"}（沒有 version）；
 一般 {"name", "owner_id", "owner", "version", "notes", "issue", "updated"}；手動加的 removed、warning 可以出現在任何一筆。
-機器人只寫 owner、version、notes、issue、updated，其他欄一律不動。
+機器人只寫 owner、version、notes、issue、updated、license、license_issue、copyright，其他欄一律不動（更新時是逐欄寫、不是整筆重寫）。
+license 是 "MIT"（上傳時勾了），license_issue 是那一次上傳的 issue 編號；沒有 license 的是表單還沒有授權選項時的舊上傳。
+copyright 是 [[年份, 顯示名, 帳號 id], ...]：LICENSE 的版權行，只增不刪、依加入的先後排，認人只認帳號 id
+（licensing.py 產生 LICENSE 的唯一依據）。
 """
 
 import json
@@ -199,10 +202,14 @@ def version_for(entry: dict | None, paths: set[str], folder: Path, form_notes: s
 
 
 def record(registry: dict, name: str, uploader_id: int, login: str, version: str, notes: str, issue: int,
-           today: str) -> None:
+           today: str, copyright: list | None = None) -> None:
     entry = registry.setdefault(key(name), {"name": name, "owner_id": uploader_id})
     entry["owner"] = login
     entry["version"] = version
     entry["notes"] = notes
     entry["issue"] = issue
     entry["updated"] = today
+    entry["license"] = "MIT"
+    entry["license_issue"] = issue
+    if copyright is not None:
+        entry["copyright"] = [list(item) for item in copyright]

@@ -147,7 +147,8 @@ def test_issue_form_matches_the_parser():
     assert "required: true" in body
     assert "labels: [上傳]" in body
     labels = re.findall(r"^\s+label: (.+)$", body, re.M)
-    assert labels[:3] == [gh.HEADING_ZIP, gh.HEADING_NOTES, gh.HEADING_AGREE]
+    assert labels[:4] == [gh.HEADING_ZIP, gh.HEADING_NOTES, gh.HEADING_FORK, gh.HEADING_AGREE]
+    assert "id: fork_of" in body
     assert re.search(r"^\s+- label: (.+)$", body, re.M).group(1) == gh.AGREE_TEXT
 
 

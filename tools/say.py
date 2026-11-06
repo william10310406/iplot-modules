@@ -22,6 +22,12 @@ SAY: dict[str, str] = {
     "no_zip": "沒有找到 zip：把模組資料夾壓成 .zip，拖進「模組的 zip」那一格。",
     "many_zips": "一次只能傳一個 zip。",
     "not_agreed": "沒有勾「我知道…」：用表單重新開一個，勾了再送出。",
+    "not_licensed": "要勾『以 MIT 授權公開』才能收；用表單重新開一個。",
+    "license_like": "zip 裡有像授權的檔：{path}。工作坊的模組一律 MIT，只能有機器人產生的那一份 LICENSE：拿掉 {path} 再傳。",
+    "license_unknown": "zip 裡的 LICENSE 不是工作坊產生的。改自工作坊的模組：LICENSE 保持原樣不要改，或拿掉它、"
+                       "在表單填「改自工作坊的哪個模組」；自己寫的模組：把 LICENSE 拿掉，機器人會自動補上。"
+                       "改自工作坊以外的 MIT 程式：把原作者的授權聲明寫在那個程式檔開頭的註解裡。",
+    "fork_unknown": "找不到「{name}」這個模組：填工作坊清單上的名稱，或留空。",
     "download": "下載不到附件（{reason}）。等一下再開一個新的。",
     "too_big": "zip 超過 25 MB。",
     "not_zip": "附件不是 zip。",
@@ -120,7 +126,7 @@ def refuse(key: str, **params: str | int) -> Refusal:
 
 
 def received_reply(name: str, version: str, files: Sequence[str], skipped: Mapping[str, int],
-                   remarks: Sequence[str]) -> str:
+                   remarks: Sequence[str], license_lines: Sequence[str] = ()) -> str:
     """「收到了」那一則：公開的檔最多列 MAX_LISTED 條，整則超過 MAX_REPLY 就把列出的條數減到 100、50、20、0。"""
     head = (f"收到了：「{code(name)}」{code(version)}，{len(files)} 個檔。"
             "網站更新之後（通常幾分鐘）在 iPLoT 按「工作坊」就看得到；超過一小時還沒有，在這裡留言。")
@@ -131,6 +137,8 @@ def received_reply(name: str, version: str, files: Sequence[str], skipped: Mappi
             tail.append("名字以 .git 開頭的檔與資料夾（.gitignore、.github…）一律不收：它們會讓 git 少收或改掉檔。")
     if remarks:
         tail.append("\n".join(f"- {remark}" for remark in remarks))
+    if license_lines:
+        tail.append("LICENSE 由機器人產生（zip 裡的 LICENSE 不會原樣收進去），版權人依先後：\n" + block(license_lines))
     tail.append(MARK_RECEIVED)
 
     reply = ""

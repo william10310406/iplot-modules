@@ -7,6 +7,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import licensing
 import pytest
 import receive
 import registry
@@ -83,13 +84,13 @@ def test_finder_zip_end_to_end(repo, python310):
     assert run(repo, api, {att(1): FIXTURES / "finder-整理桌面.zip"}, python310) == 0
     folder = repo / "modules" / "整理桌面"
     files = sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file())
-    assert files == ["iplot.py", "小工具.py", "資料/說明.txt"]
+    assert files == ["LICENSE", "iplot.py", "小工具.py", "資料/說明.txt"]
     for gone in ("捷徑", ".history", ".DS_Store"):
         assert not (folder / gone).exists()
     assert git(repo, "rev-parse", "HEAD").strip() == origin_main(repo)
     assert "#1）" in subjects(repo)[-1]
     reply = api.comments[1][0]
-    assert code("整理桌面") in reply and "3 個檔" in reply and "__MACOSX/" in reply
+    assert code("整理桌面") in reply and "4 個檔" in reply and "__MACOSX/" in reply
     assert api.patches == [(1, PUBLISHED)]
 
 
@@ -446,7 +447,8 @@ def test_may_publish_gets_the_whole_upload(repo, python310, tmp_path, monkeypatc
     assert (upload.issue, upload.user_id, upload.login) == (7, 222, "someone")
     assert (upload.name, upload.key, upload.version, upload.notes) == ("整理桌面", registry.key("整理桌面"), "0.1.1",
                                                                        "改了一點")
-    expected = {"iplot.py": IPLOT_PY.encode(), "資料/a.txt": "內容".encode()}
+    expected = {"iplot.py": IPLOT_PY.encode(), "資料/a.txt": "內容".encode(),
+                "LICENSE": licensing.render([[2026, "@someone (GitHub user 222)", 222]]).encode()}
     assert [f.path for f in upload.files] == sorted(expected)
     for f in upload.files:
         assert f.size == len(expected[f.path]) and f.sha256 == hashlib.sha256(expected[f.path]).hexdigest()

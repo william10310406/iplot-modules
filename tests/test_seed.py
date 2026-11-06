@@ -9,7 +9,7 @@ from iplot_rules import read_listing
 ROOT = Path(__file__).resolve().parents[1]
 RA_ID = 71483597  # Task 0 探針：GET /users/william10310406
 SEEDS = ("開工", "打開核心原始碼", "開Terminal", "重新啟動", "互通", "主控面板", "行事曆", "科學計算", "上傳")
-NOTICE = "這裡的模組是大家上傳的，沒有人審查。裝進來的模組第一次執行前 iPLoT 會先問；按確定之前，在面板上右鍵「打開程式碼」看一眼。"
+NOTICE = "這裡的模組是大家上傳的，沒有人審查；都以 MIT 授權公開，可以改、可以再分享（保留 LICENSE）。裝進來的模組第一次執行前 iPLoT 會先問；按確定之前，在面板上右鍵「打開程式碼」看一眼。"
 
 
 def seed() -> dict:
@@ -30,11 +30,11 @@ def test_reserved_three_have_only_name_and_reserved():
 
 
 def test_seeds_belong_to_the_research_assistant():
+    # 只看種子那幾筆；registry 裡還有別人上傳的（車車、同事測試…），不歸這個測試管
     data = seed()
-    assert len(data) == 12
     for name in SEEDS:
         entry = data[registry.key(name)]
-        assert set(entry) == {"name", "owner_id", "owner"}
+        assert {"name", "owner_id", "owner"} <= set(entry)
         assert entry["name"] == name
         assert entry["owner_id"] == RA_ID
         assert entry["owner"] == "william10310406"
@@ -46,9 +46,12 @@ def test_ghost_is_nowhere_in_the_registry():
         assert entry.get("owner") != "ghost"
 
 
-def test_received_starts_empty():
-    assert registry.read_json_strict(ROOT / "received.json") == {}
-    assert (ROOT / "received.json").read_text(encoding="utf-8") == "{}\n"
+def test_received_is_a_strict_record_of_uploads():
+    # 一開始是 {}；現在記著收過的每一份（含別人的），只核形狀
+    received = registry.read_json_strict(ROOT / "received.json")
+    for number, record in received.items():
+        assert number.isdigit()
+        assert {"name", "version", "owner_id", "at"} <= set(record)
 
 
 def test_notice_is_the_design_sentence():

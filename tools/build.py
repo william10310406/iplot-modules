@@ -32,6 +32,7 @@ MODULES = "模組"
 MAX_INDEX = 2 * 1024 * 1024
 EPOCH = (1980, 1, 1, 0, 0, 0)
 DELETED = "帳號已刪除"
+NO_LICENSE_WARNING = "上傳時還沒有授權選項；要改或再分享，先問上傳者。"
 CHUNK = 64 * 1024
 
 PAGE = """<!doctype html>
@@ -150,9 +151,12 @@ def make_entry(entry: dict, root: Path, out: Path, base_url: str, api, cache) ->
     notes = entry.get("notes", "")
     author = author_of(api, entry, cache)
     warning = entry.get("warning")
+    license_ = entry.get("license")
+    if not (isinstance(license_, str) and license_):
+        license_ = None
     if not (isinstance(warning, str) and warning):
-        warning = None
-    shown = [name, entry["version"], description, icon, notes, author, warning]
+        warning = None if license_ else NO_LICENSE_WARNING  # 手動寫的 warning 優先
+    shown = [name, entry["version"], description, icon, notes, author, warning, license_]
     try:
         json.dumps(shown, ensure_ascii=False).encode("utf-8")
     except UnicodeEncodeError:
@@ -167,6 +171,7 @@ def make_entry(entry: dict, root: Path, out: Path, base_url: str, api, cache) ->
         "icon": icon,
         "notes": notes,
         "author": author,
+        "license": license_,
     }
     if warning is not None:
         result["warning"] = warning
@@ -186,6 +191,8 @@ def render_html(notice: str, uploads: list[dict]) -> str:
         author = u["author"] if u["author"] == DELETED else f"@{u['author']}"
         notes = f'<p class="notes">這一版：{e(u["notes"])}</p>\n' if u.get("notes") else ""
         warning = f'<p class="warn">⚠ {e(u["warning"])}</p>\n' if u.get("warning") else ""
+        if u.get("license"):
+            author += f"・授權：{u['license']}"
         blocks.append(BLOCK.format(icon=e(u["icon"]), name=e(u["name"]), version=e(u["version"]), author=e(author),
                                    description=e(u["description"]), notes=notes, warning=warning,
                                    zip_url=e(u["zip_url"]), sha256=e(u["sha256"])))

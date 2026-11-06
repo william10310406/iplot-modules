@@ -16,10 +16,22 @@ body:
     attributes:
       label: 這一版改了什麼（選填）
       description: 模組裡有 CHANGELOG.md 的話以它為準，這裡不用寫。
+  - type: input
+    id: fork_of
+    attributes:
+      label: 改自工作坊的哪個模組（選填）
+      description: 改別人的模組再上傳時填它的名稱，原作者的版權行會保留。
   - type: checkboxes
     id: agree
     attributes:
       label: 確認
       options:
         - label: 我知道上傳的東西誰都看得到、誰都能下載執行；收到之後，這個名字只有我的帳號能更新。
+          required: true
+  - type: checkboxes
+    id: license
+    attributes:
+      label: 授權
+      options:
+        - label: 這些程式是我寫的（或我有權這樣做），我以 MIT 授權公開：任何人都能使用、修改、再散佈，只要保留授權聲明。
           required: true
