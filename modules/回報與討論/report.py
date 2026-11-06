@@ -15,7 +15,7 @@ from pathlib import Path
 import forum
 import redact
 
-REPORTER = "0.1.0"  # 內文最後那一行的 HTML 註解帶的版本：跟 CHANGELOG.md 最上面那一節一樣（測試核）
+REPORTER = "0.1.1"  # 內文最後那一行的 HTML 註解帶的版本：跟 CHANGELOG.md 最上面那一節一樣（測試核）
 WHAT_HEAD = "### 發生了什麼"
 WHAT_ERROR = "（請寫一兩句：按了什麼、預期是什麼）"
 WHAT_BLANK = "（請寫：按了什麼、看到什麼、預期是什麼）"
@@ -26,6 +26,7 @@ MAX_URL = 2000            # 保守值，每個平台都一樣（研究助理 202
 MAX_LOGIN_REDIRECT = 5600 # 沒登入時 GitHub 轉去登入的那條網址：量到 ≤ 5742 字才完整（2026-10-24），留一點餘裕
 LOGIN = "https://github.com/login?return_to="
 MAX_TITLE = 200           # 網址放不下時，標題超過這麼多字一律先截到這麼多、再截內文（設計第 8 節）
+PUBLIC_WARNING = "這會公開在網路上，任何人都看得到。送出前請自己再看一次，刪掉姓名、學號等個人資料。"  # 送出那顆鈕旁邊（預覽頁）與確認框最前面（tkinter）
 HINT = "完整報告已複製，GitHub 出錯或內容被截斷時，按 ⌘V／Ctrl+V 貼上。"  # 研究助理的原句：真的複製成了才用
 # 沒複製成時網址內文最後那一句（網頁那一頭也是頁面最後那一行）：剪貼簿裡是之前複製的東西，可能是沒遮過的，不叫人貼上。
 # 存了 .txt 指那個檔；存不了檔的話，網頁指頁面下面那一格（#full 放回畫面上），tkinter 指訊息區（遮過的全文寫在那裡）

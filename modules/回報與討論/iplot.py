@@ -58,6 +58,7 @@ def stamp() -> str:
 def render(data: dict) -> str:
     """page.html，資料以 JSON 放進 <script type="application/json">：< 換成 \\u003c，traceback 裡的 </script>
     關不掉它；頁面上的字一律用 textContent／value。"""
+    data = {**data, "warning": report.PUBLIC_WARNING}  # 送出那顆鈕上面的公開提示：字只在 report.py 寫一次
     return (HERE / "page.html").read_text(encoding="utf-8").replace(
         "__DATA__", json.dumps(data, ensure_ascii=False).replace("<", "\\u003c"), 1)
 
@@ -280,7 +281,7 @@ def _by_file(app, rep: report.Report, kind: str) -> None:
         return
     app.log(rep.notice)
     app.edit(draft)
-    if not app.confirm(f"草稿在 回報/{draft.name}，已經用編輯器打開。改好、存檔之後按「確定」就用瀏覽器打開；"
+    if not app.confirm(f"{report.PUBLIC_WARNING}\n\n草稿在 回報/{draft.name}，已經用編輯器打開。改好、存檔之後按「確定」就用瀏覽器打開；"
                        "按「取消」就不送，草稿留著。"):
         app.log(f"沒有送出；草稿留在 回報/{draft.name}")
         return

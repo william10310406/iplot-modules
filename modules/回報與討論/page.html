@@ -30,6 +30,7 @@ input, textarea, select { width: 100%; padding: 6px 8px; border: 1px solid var(-
 textarea { font: 12px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; resize: vertical; }
 #body { height: 20em; }
 #url, #link { height: 6em; margin-top: 6px; }
+.warning { margin: 10px 0 6px; padding: 8px 10px; border: 2px solid var(--danger); border-radius: 7px; font-weight: 600; }
 .note { margin: 6px 0; color: var(--muted); font-size: 12.5px; }
 .note.over { color: var(--danger); }
 .login { margin: 10px 0; }
@@ -63,6 +64,7 @@ button:disabled { opacity: .5; }
   <textarea id="body" spellcheck="false"></textarea>
   <p class="note" id="length">量網址長度中…</p>
   <p class="login"><b>按之前先確認這台電腦的瀏覽器已經登入 GitHub。</b> 沒登入的話，登入之後 GitHub 可能出錯、填好的內容會不見；那時候直接貼上剪貼簿裡的就好。</p>
+  <p class="warning" id="warning"></p>
   <p><button id="open" type="button" disabled>在瀏覽器打開</button></p>
   <p id="result"></p>
   <div id="after" hidden>
@@ -212,6 +214,7 @@ for (const name of data.modules || []) {
 }
 $("env").textContent = data.short_env || "";
 $("hint").textContent = data.hint;
+$("warning").textContent = data.warning;
 $("title").addEventListener("input", edited);
 $("body").addEventListener("input", edited);
 
