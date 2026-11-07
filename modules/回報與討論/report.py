@@ -15,10 +15,15 @@ from pathlib import Path
 import forum
 import redact
 
-REPORTER = "0.1.1"  # 內文最後那一行的 HTML 註解帶的版本：跟 CHANGELOG.md 最上面那一節一樣（測試核）
+REPORTER = "0.2.0"  # 內文最後那一行的 HTML 註解帶的版本：跟 CHANGELOG.md 最上面那一節一樣（測試核）
 WHAT_HEAD = "### 發生了什麼"
 WHAT_ERROR = "（請寫一兩句：按了什麼、預期是什麼）"
 WHAT_BLANK = "（請寫：按了什麼、看到什麼、預期是什麼）"
+DOING_HEAD = "我當時在做什麼："  # 預覽頁那一格寫了字的話，放在「發生了什麼」底下的第一行
+LOG_HEAD = "### 最近的訊息"
+LOG_LINES, LOG_CHARS = 40, 3000  # 最近的訊息最多放幾行、幾個字（從最後面往回算）
+LOG_DROPPED = "（太長，沒放進網址；完整報告裡有）"  # 網址放不下時，「最近的訊息」那一節換成這一行
+LAST_ERROR = Path("logs") / "last-error.json"  # 面板寫的最近一次的錯誤（iPLoT 0.6.2 起，docs/07 第 13 節）
 LOST = "<模組>"  # 出錯的模組找不到它的資料夾時，標題與那一句白話裡的名字（不退回 error.module）
 
 MAX_URL = 2000            # 保守值，每個平台都一樣（研究助理 2026-10-25：不實測；Windows 的 ShellExecute 約 2083，
@@ -160,13 +165,26 @@ def fence(text: str) -> str:
     return "~" * max(4, longest + 1)
 
 
-def body(what: str, env: list[str], sentence: str | None, tb: str | None) -> str:
-    """內文（設計第 7 節）。sentence 與 tb 都是 None：沒有「錯誤」那一節；tb 是 ""：框裡寫「（沒有 traceback）」。"""
+def recent_text(lines) -> str:
+    """「最近的訊息」那一節的框裡：最後 LOG_LINES 行，再從最後面往回留 LOG_CHARS 個字（截在行首）。"""
+    text = "\n".join(str(line) for line in list(lines)[-LOG_LINES:]).rstrip("\n")
+    if len(text) > LOG_CHARS:
+        text = text[-LOG_CHARS:].partition("\n")[2] or text[-LOG_CHARS:]
+    return text
+
+
+def body(what: str, env: list[str], sentence: str | None, tb: str | None, log=()) -> str:
+    """內文（設計第 7 節）。sentence 與 tb 都是 None：沒有「錯誤」那一節；tb 是 ""：框裡寫「（沒有 traceback）」。
+    log 是面板訊息區最近的幾行（D150）：有的話，「錯誤」後面多一節「最近的訊息」。"""
     parts = [f"{WHAT_HEAD}\n{what}", "### 環境\n" + "\n".join(env)]
     if sentence is not None or tb is not None:
         inner = (tb or "").rstrip("\n") or "（沒有 traceback）"
         mark = fence(inner)
         parts.append(f"### 錯誤\n{sentence or ''}\n\n{mark}text\n{inner}\n{mark}")
+    recent = recent_text(log)
+    if recent.strip():
+        mark = fence(recent)
+        parts.append(f"{LOG_HEAD}\n{mark}text\n{recent}\n{mark}")
     parts.append(f"<!-- iPLoT 回報 {REPORTER} -->")
     return "\n\n".join(parts)
 
@@ -179,7 +197,7 @@ def _masked(category: str, title: str, text: str, ctx: redact.Ctx) -> Report:
     return Report(category, title, text, redact.summary(counts, ctx), ctx)
 
 
-def from_error(error, app) -> Report:
+def from_error(error, app, log=()) -> Report:
     """「回報這個問題」：一筆 ErrorInfo 變成遮過的回報。下一層模組的名字藏起來，標題用最上層模組的名字。
     出錯的模組找不到它的資料夾時，名字一律寫 <模組>：error.module 可能是學生的名字，也不放進 secrets
     （redact 的第 7 步不分大小寫、沒有字界，叫 A 的模組會把整段 traceback 換爛）。"""
@@ -195,7 +213,7 @@ def from_error(error, app) -> Report:
     else:
         name = {"core": "核心", "config": "config.py"}.get(error.source, "iPLoT")
     sentence = describe(replace(error, module=LOST) if lost else error)
-    text = body(WHAT_ERROR, environment(app, top, bool(hidden), error.source), sentence, error.traceback_text)
+    text = body(WHAT_ERROR, environment(app, top, bool(hidden), error.source), sentence, error.traceback_text, log)
     return _masked("BUG", f"[回報] {name}：{error.kind}（iPLoT {app.version}）", text, ctx)
 
 
@@ -206,6 +224,52 @@ def blank(app, category: str, module: str | None = None) -> Report:
         top = next((m.folder for m in app.modules if m.name == module and m.level != "child"), None)
     text = body(WHAT_BLANK, environment(app, top, False, None), None, None)
     return _masked(category, "[回報] ", text, redact.context(app.home, top))
+
+
+def last_error(home: Path) -> tuple | None:
+    """面板寫的最近一次的錯誤（logs/last-error.json，D150）：(ErrorInfo, 最近的訊息, 時間)。沒有、讀不到、
+    格式不對（舊版 iPLoT 沒有這個檔、檔被改壞了）都回 None：只附環境資訊。"""
+    import json
+
+    from core.types import ErrorInfo
+
+    try:
+        data = json.loads((home / LAST_ERROR).read_text(encoding="utf-8", errors="surrogateescape"))
+        kind, message, tb = data["kind"], data["message"], data["traceback_text"]
+        file, line, source, module = data["file"], data["line"], data["source"], data["module"]
+        recent, when = data.get("recent", []), data.get("time", "")
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    good = (all(isinstance(v, str) for v in (kind, message, tb, when)) and source in ("module", "core", "config")
+            and isinstance(file, str | None) and (line is None or type(line) is int) and isinstance(module, str | None)
+            and isinstance(recent, list) and all(isinstance(r, str) for r in recent))
+    if not good:
+        return None
+    return ErrorInfo(kind, message, None if file is None else Path(file), line, tb, source, module), recent, when
+
+
+def recent_for(home: Path, error) -> list[str]:
+    """「回報這個問題」那一筆的最近的訊息：logs/last-error.json 記的就是這一筆（traceback 一樣）才附；按的是更早的
+    那一筆的鈕，那個檔已經是後來那一筆的了，不附別人的訊息。"""
+    last = last_error(home)
+    if last is None or (last[0].kind, last[0].traceback_text) != (error.kind, error.traceback_text):
+        return []
+    return last[1]
+
+
+def with_doing(text: str, doing: str) -> str:
+    """預覽頁「我當時在做什麼」那一格：寫了字的話，放進「發生了什麼」底下（換掉提示的那一句；提示被改掉了就接在標題
+    下面一行）。沒寫字照原樣。"""
+    doing = " ".join(str(doing).split())
+    if not doing:
+        return text
+    line = DOING_HEAD + doing
+    for placeholder in (WHAT_ERROR, WHAT_BLANK):
+        if f"{WHAT_HEAD}\n{placeholder}" in text:
+            return text.replace(f"{WHAT_HEAD}\n{placeholder}", f"{WHAT_HEAD}\n{line}", 1)
+    if WHAT_HEAD in text:
+        return text.replace(WHAT_HEAD, f"{WHAT_HEAD}\n{line}", 1)
+    return f"{WHAT_HEAD}\n{line}\n\n{text}"
 
 
 def short_env(app) -> str:
@@ -335,8 +399,23 @@ def _what(body: str):
     return (lambda n: before + _tail(text, n) + after), 0, len(text)
 
 
+def _nolog(body: str):
+    """第 2 步之前：「最近的訊息」那一節（traceback 的框之後）整節換成 LOG_DROPPED，回 (cut, 0, 0)；沒有這一節回 None。"""
+    lines = body.split("\n")
+    after = (_fence(lines) or (-1, -1))[1]
+    h = next((h for h in range(after + 1, len(lines)) if lines[h] == LOG_HEAD), None)
+    if h is None or h + 1 >= len(lines) or not _opener(lines[h + 1]):
+        return None
+    mark = _opener(lines[h + 1])
+    e = next((e for e in range(h + 2, len(lines)) if lines[e] == mark), None)
+    if e is None:
+        return None
+    cut = "\n".join([*lines[:h + 1], LOG_DROPPED, *lines[e + 1:]])
+    return (lambda n: cut), 0, 0
+
+
 def _shorten(category: str, title: str, body: str, limit: int, hint: str) -> str | None:
-    """fit 的第 2、3 步，標題不動：回截到放得下的內文（不用截就是 body）；內文只剩 CUT 也放不下，回 None。
+    """fit 的第 2、3 步，標題不動（第 2 步之前先把「最近的訊息」整節拿掉，_nolog）：回截到放得下的內文（不用截就是 body）；內文只剩 CUT 也放不下，回 None。
     每一步放不下時，下一步從比較短的那一份接著截（框裡只有 3 行時，換成 TRUNCATED 那一句反而比較長）。
     traceback 中間截掉的那一行：hint 是 HINT（真的複製成了）才說在剪貼簿裡，不然是 TRUNCATED_ELSEWHERE。"""
     marker = TRUNCATED if hint == HINT else TRUNCATED_ELSEWHERE
@@ -349,7 +428,7 @@ def _shorten(category: str, title: str, body: str, limit: int, hint: str) -> str
 
     if ok(body):
         return body
-    for step in (lambda b: _middle(b, marker), _what):
+    for step in (_nolog, lambda b: _middle(b, marker), _what):
         found = step(body)
         if found is not None:
             cut, low, top = found
@@ -365,7 +444,7 @@ def fit(category: str, title: str, body: str, limit: int, hint: str = HINT) -> t
     沒複製成時呼叫的那一頭給 HINT_FILE、HINT_PAGE 或 HINT_LOG），截的時候也留著；
     limit 不比下限（見最後）短的話，回的網址 ≤ limit、轉去登入的那條 ≤ MAX_LOGIN_REDIRECT。順序：①放得下就照用
     （標題再長也不動）；放不下的話，標題超過 MAX_TITLE 字一律先截到 MAX_TITLE，再截內文：②traceback 的框留第一行與
-    最後 k 行；③「發生了什麼」從後面截，還是放不下就從內文的尾巴截；④內文只剩 CUT 也放不下（標題本身就很長）就再截
+    最後 k 行（在這之前，「最近的訊息」整節先換成 LOG_DROPPED）；③「發生了什麼」從後面截，還是放不下就從內文的尾巴截；④內文只剩 CUT 也放不下（標題本身就很長）就再截
     標題。都是在編碼之前以行或字為單位截，不會切在 %XX 中間。
     下限是「標題空白、內文只剩一行 CUT 加 hint」的那一條網址（HINT 的話現在 BUG、IDEA 433 字，QA、NEWS 415 字；body
     本來就是空字串的話內文只有 HINT：361、343 字。BUG 的話 HINT_LOG 是 600、HINT_PAGE 636，HINT_FILE 看檔名，

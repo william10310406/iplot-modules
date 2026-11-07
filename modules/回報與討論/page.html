@@ -51,6 +51,7 @@ button:disabled { opacity: .5; }
   <p class="notice">論壇是公開的，任何人都看得到。「回報問題」會先讓你看過、改過要送出的內容；其他三個直接用瀏覽器打開。</p>
   <label for="module">回報問題（畫面不對、太慢、結果不對，沒有出現錯誤訊息的）：相關的模組</label>
   <div class="row"><select id="module"><option value="">（不指定模組）</option></select><button id="report" type="button" disabled>回報問題</button></div>
+  <p class="note" id="last" hidden></p>
   <p class="note">提建議、問問題的內文最後會帶這一行（版本與作業系統，沒有路徑）：<span id="env"></span></p>
   <p class="row"><button id="idea" type="button" disabled>提建議</button><button id="qa" type="button" disabled>問問題</button><button id="forum" type="button" disabled>看論壇</button></p>
   <p id="said"></p>
@@ -58,6 +59,8 @@ button:disabled { opacity: .5; }
 </section>
 <section id="edit">
   <p class="notice"><span id="notice"></span>論壇是公開的，任何人都看得到；送出前請再看一次，特別是學生的名字。不送的話，直接關掉這個視窗。</p>
+  <label for="doing">我當時在做什麼（一句話就好，會放進「發生了什麼」）</label>
+  <input id="doing" type="text" spellcheck="false" placeholder="例如：按了「科學計算」裡的第二個作業">
   <label for="title">標題</label>
   <input id="title" type="text" spellcheck="false">
   <label for="body">內文</label>
@@ -65,7 +68,7 @@ button:disabled { opacity: .5; }
   <p class="note" id="length">量網址長度中…</p>
   <p class="login"><b>按之前先確認這台電腦的瀏覽器已經登入 GitHub。</b> 沒登入的話，登入之後 GitHub 可能出錯、填好的內容會不見；那時候直接貼上剪貼簿裡的就好。</p>
   <p class="warning" id="warning"></p>
-  <p><button id="open" type="button" disabled>在瀏覽器打開</button></p>
+  <p class="row"><button id="open" type="button" disabled>在瀏覽器打開</button><button id="copy" class="plain" type="button" disabled>複製整份報告</button></p>
   <p id="result"></p>
   <div id="after" hidden>
     <label for="newUrl">GitHub 出錯時，打開這個新增頁，把內文整個換成完整的回報：</label>
@@ -93,13 +96,14 @@ function why(e) {
 // 「在瀏覽器打開」與「再複製一次」：亮著的時候，#full 一定是現在這份內容遮過的樣子
 function ready(on) {
   $("open").disabled = !on;
+  $("copy").disabled = !on;
   $("again").disabled = !on;
 }
 
 function measure() {
   const n = ++seq;
   ready(false);
-  window.pywebview.api.measure($("title").value, $("body").value).then((r) => {
+  window.pywebview.api.measure($("title").value, $("body").value, $("doing").value).then((r) => {
     if (n !== seq) return;
     $("full").value = r.full;
     $("length").textContent = r.sentence;
@@ -133,7 +137,7 @@ $("open").addEventListener("click", () => {
   const copied = document.execCommand("copy");  // 同步、在 click 裡、叫 send 之前：瀏覽器只讓按下去的那一下複製
   const n = seq;
   ready(false);
-  window.pywebview.api.send($("title").value, $("body").value, copied).then((r) => {  // 成不成交給 Python：網址的最後一句
+  window.pywebview.api.send($("title").value, $("body").value, copied, $("doing").value).then((r) => {  // 成不成交給 Python：網址的最後一句
     sentence = r.sentence;
     uncopied = r.uncopied;
     $("result").textContent = sentence + clip(copied, false);
@@ -155,6 +159,14 @@ $("again").addEventListener("click", () => {
   const copied = document.execCommand("copy");
   $("result").textContent = sentence + clip(copied, true);
   $("hint").textContent = copied ? data.hint : uncopied;
+});
+
+// 「複製整份報告」：不開瀏覽器，只複製遮過的全文（#full），自己貼到 GitHub、Email 或任何地方
+$("copy").addEventListener("click", () => {
+  $("full").focus({ preventScroll: true });
+  $("full").select();
+  const copied = document.execCommand("copy");
+  $("result").textContent = clip(copied, false) + (copied ? "可以直接貼上。送出到公開的論壇之前，請再看一次內容。" : "");
 });
 
 // 顯示 #menu 或 #edit。#hint 跟著 #edit：它說「完整報告已複製」，#menu 上什麼都還沒複製（提建議、問問題、看論壇也從不複製）
@@ -213,10 +225,13 @@ for (const name of data.modules || []) {
   $("module").append(option);
 }
 $("env").textContent = data.short_env || "";
+$("last").textContent = data.last || "";  // 「回報問題」會附上面板記的最近一次的錯誤（D150）；沒有的話只附環境資訊
+$("last").hidden = !data.last;
 $("hint").textContent = data.hint;
 $("warning").textContent = data.warning;
 $("title").addEventListener("input", edited);
 $("body").addEventListener("input", edited);
+$("doing").addEventListener("input", edited);
 
 function connected() {
   if (started) return;

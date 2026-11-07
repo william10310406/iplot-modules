@@ -48,6 +48,7 @@ UNENCODABLE = "有沒辦法存成 UTF-8 的字"  # 孤立的代理字元：Unico
 NOT_OPENED = "瀏覽器打不開。把下面這串網址整個複製到瀏覽器的網址列；{where}"
 TK_NOT_OPENED = "瀏覽器打不開。{cut}把這串網址整個複製到瀏覽器的網址列：{url}"  # tkinter 面板的訊息區；cut 見 _tk_cut
 MENU = "要做什麼？輸入 1 回報問題、2 提建議、3 問問題、4 看論壇"  # tkinter 面板沒有頁面：run 問這一句（設計第 9 節）
+LAST = "會附上最近一次的錯誤（{when}）：{title}"  # 「回報問題」那一份是面板記的最近一次的錯誤時，#menu 與 tkinter 訊息區那一句
 ASKS = ("IDEA", "QA")  # 提建議、問問題：直接開新增頁，內文只帶 short_env（回報問題 BUG 走預覽；公告 NEWS 不給人開）
 
 
@@ -63,9 +64,11 @@ def render(data: dict) -> str:
         "__DATA__", json.dumps(data, ensure_ascii=False).replace("<", "\\u003c"), 1)
 
 
-def _again(rep: report.Report, title: str, body: str) -> tuple[str, str, str]:
+def _again(rep: report.Report, title: str, body: str, doing: str = "") -> tuple[str, str, str]:
     """送出前再遮一次（同一個 ctx：使用者在頁面上、草稿裡貼進來的路徑也遮），回 (title, body, full)。
+    doing 是預覽頁「我當時在做什麼」那一格（report.with_doing），也遮。
     full 是剪貼簿與 .txt 那一份：遮過、沒截、不帶 HINT（設計第 17 節第 15 條）。"""
+    body = report.with_doing(body, doing if isinstance(doing, str) else "")
     title, body = redact.redact(title, rep.ctx)[0], redact.redact(body, rep.ctx)[0]
     return title, body, f"{title}\n\n{body}"
 
@@ -169,25 +172,26 @@ class Api:
         """「看論壇」。"""
         return _browse(forum.FORUM)
 
-    def measure(self, title: str, body: str) -> dict:
-        """長度那一行與 full：頁面把 full 放進 #full，按下去時複製的就是它（跟 send 存的檔一字不差）。"""
+    def measure(self, title: str, body: str, doing: str = "") -> dict:
+        """長度那一行與 full：頁面把 full 放進 #full，按下去時（在瀏覽器打開、複製整份報告）複製的就是它（跟 send
+        存的檔一字不差）。"""
         with self._lock:
             rep = self._rep
-            title, body, full = _again(rep, title, body)
+            title, body, full = _again(rep, title, body, doing)
             u, limit = report.url(rep.category, title, report.with_hint(body)), report.max_url()
             sentence = f"網址長度 {len(u)}／{limit}"
             if not report.fits(u, limit):
                 sentence += "：traceback 會從中間截斷；完整的會在剪貼簿與檔案裡"
             return {"length": len(u), "limit": limit, "sentence": sentence, "full": full}
 
-    def send(self, title: str, body: str, copied: bool = False) -> dict:
+    def send(self, title: str, body: str, copied: bool = False, doing: str = "") -> dict:
         """再遮一次、先存檔、再組網址開瀏覽器（研究助理 2026-10-24：登入之後 GitHub 可能回 500，不能只靠網址）。
         copied 是頁面在叫 send 之前那一下 execCommand("copy") 的結果：真的是 True 才算複製成了，網址內文最後才是
         HINT；不然是 uncopied（_uncopied）。hint 是網址內文最後那一句，頁面把它放進 #hint；「再複製一次」沒成時頁面
         換成 uncopied。"""
         with self._lock:
             rep = self._rep
-            title, body, full = _again(rep, title, body)
+            title, body, full = _again(rep, title, body, doing)
             f, err = _save(self._kind, full)
             copied = copied is True
             uncopied = _uncopied(f, report.HINT_PAGE)
@@ -216,17 +220,28 @@ def run(app):
     env = report.short_env(app)
     names = list(dict.fromkeys(m.name for m in app.modules if m.level != "child"))  # 不同的根底下同名的只列一次
     saved = []
-    data = {"mode": "menu", "modules": names, "short_env": env,
+    first, last = _latest(app)
+    data = {"mode": "menu", "modules": names, "short_env": env, "last": last,
             "hint": report.HINT}  # HINT：「回報問題」換到預覽那一段才顯示（page.html 的 show），#menu 上什麼都還沒複製
-    api = Api(report.blank(app, "BUG"), "回報", saved, {n: report.blank(app, "BUG", n) for n in names}, env)
+    api = Api(first, "回報", saved, {n: report.blank(app, "BUG", n) for n in names}, env)
     app.page("回報與討論", render(data), api)
     _reveal(app, api)
+
+
+def _latest(app) -> tuple[report.Report, str]:
+    """「回報問題」不指定模組的那一份：面板記了最近一次的錯誤（logs/last-error.json，D150）就是那一筆的回報（附那時候
+    最近的訊息），回 (那一份, 給人看的那一句「會附上…」)；沒有的話是沒有錯誤的那一份與 ""（只附環境資訊）。"""
+    last = report.last_error(app.home)
+    if last is None:
+        return report.blank(app, "BUG"), ""
+    rep = report.from_error(last[0], app, last[1])
+    return rep, LAST.format(when=last[2] or "時間不明", title=rep.title)
 
 
 def on_error(app, error):
     """面板上的「回報這個問題」（D110）：遮過的回報給人看、讓人改，再用預填的網址開瀏覽器（設計第 5.1、5.2 節）。
     頁面那一頭不碰 app：存了要指給人看的檔，等頁面關掉、回到這裡才 reveal。"""
-    rep = report.from_error(error, app)
+    rep = report.from_error(error, app, report.recent_for(app.home, error))
     if report.panel_kind() == "tkinter":
         return _by_file(app, rep, error.kind)
     saved = []
@@ -253,7 +268,10 @@ def _menu_by_ask(app) -> None:
     if answer is None:
         return
     if answer == "1":
-        _by_file(app, report.blank(app, "BUG"), "回報")
+        rep, last = _latest(app)
+        if last:
+            app.log(last)
+        _by_file(app, rep, "回報")
     elif answer in ("2", "3"):
         _open_or_log(app, _ask_url({"2": "IDEA", "3": "QA"}[answer], report.short_env(app)))
     elif answer == "4":
