@@ -8,7 +8,7 @@ from iplot_rules import read_listing
 
 ROOT = Path(__file__).resolve().parents[1]
 RA_ID = 71483597  # Task 0 探針：GET /users/william10310406
-SEEDS = ("開工", "打開核心原始碼", "開Terminal", "重新啟動", "互通", "主控面板", "行事曆", "科學計算", "上傳")
+SEEDS = ("開工", "打開核心原始碼", "開Terminal", "重新啟動", "互通", "主控面板", "行事曆", "科學計算", "上傳", "課程作業")
 NOTICE = "這裡的模組是大家上傳的，沒有人審查；都以 MIT 授權公開，可以改、可以再分享（保留 LICENSE）。裝進來的模組第一次執行前 iPLoT 會先問；按確定之前，在面板上右鍵「打開程式碼」看一眼。"
 
 
