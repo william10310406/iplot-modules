@@ -189,6 +189,19 @@
     "name": "課程作業",
     "owner_id": 71483597,
     "owner": "william10310406",
-    "warning": "測試中，老師請先不要用"
+    "warning": "測試中，老師請先不要用",
+    "version": "0.1.0",
+    "notes": "第一版：出作業的老師從範本寫一份作業、在 iPLoT 裡選一個 case 看結果、按「檢查與打包」得到學生包；學生在自己的電腦上照 README 跑。跟科目無關，核心一行都不改。",
+    "issue": 22,
+    "updated": "2026-11-07",
+    "license": "MIT",
+    "license_issue": 22,
+    "copyright": [
+      [
+        2026,
+        "Wei-Heng Chien (簡偉恆)",
+        71483597
+      ]
+    ]
   }
 }
