@@ -1,0 +1,14 @@
+# 行事曆 2 的 ruff 設定。隨附的 iPLoT 沒有 pyproject.toml，所以放在這裡；規則明列、不吃工具預設（D29 的精神）。
+# 複製來的舊檔（iplot.py、diary.py、pages.py、photos.py）在這份規則下只有 2 個警告，都是 iplot.py 的 _ps()
+# 用清單叫 ps（S603、S607；D50 允許：傳清單、不拼字串、不經過 shell），所以關掉這兩條；新程式碼不能多出任何警告。
+line-length = 140
+target-version = "py310"
+extend-exclude = ["docs", ".history"]
+
+[lint]
+select = ["E", "F", "I", "B", "S", "BLE", "UP"]
+ignore = ["S603", "S607"]
+
+[lint.per-file-ignores]
+# 測試：assert 是測試的語法；FAKE-TOKEN 這類假的字串會被誤認成寫死的密碼
+"tests/*" = ["S101", "S105", "S106"]

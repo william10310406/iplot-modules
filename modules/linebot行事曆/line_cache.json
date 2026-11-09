@@ -1,0 +1,278 @@
+{
+ "version": 1,
+ "account": "6e055ca9279f",
+ "last": {
+  "at": 1794191065.738049,
+  "ok": true,
+  "kind": null,
+  "message": ""
+ },
+ "retry_until": null,
+ "slices": [
+  {
+   "fetched_at": "2026-11-09T10:24:25+08:00",
+   "data": {
+    "version": 1,
+    "generatedAt": "2026-11-09T10:24:25+08:00",
+    "range": {
+     "from": "2026-10-05",
+     "to": "2027-01-18"
+    },
+    "events": [
+     {
+      "id": "01M639B1VDYCK96530C9J6W4MN",
+      "title": "演算法期中考",
+      "allDay": false,
+      "start": "2026-11-03T09:10:00+08:00",
+      "end": "2026-11-03T12:00:00+08:00",
+      "startDate": "2026-11-03",
+      "endDate": "2026-11-03",
+      "location": null,
+      "note": null,
+      "private": false,
+      "group": "工作群"
+     },
+     {
+      "id": "01M6AG6XPCY5KCEG7SYQPRDMN8",
+      "title": "普通物理期中考",
+      "allDay": false,
+      "start": "2026-11-03T13:40:00+08:00",
+      "end": "2026-11-03T15:30:00+08:00",
+      "startDate": "2026-11-03",
+      "endDate": "2026-11-03",
+      "location": null,
+      "note": null,
+      "private": false,
+      "group": "工作群"
+     },
+     {
+      "id": "01M6397R0BR7Q47WHY4N6DE1M9",
+      "title": "電子學期中考",
+      "allDay": false,
+      "start": "2026-11-04T09:10:00+08:00",
+      "end": "2026-11-04T12:00:00+08:00",
+      "startDate": "2026-11-04",
+      "endDate": "2026-11-04",
+      "location": null,
+      "note": null,
+      "private": false,
+      "group": "工作群"
+     },
+     {
+      "id": "01M645PJTBKP7P4Q1KR10DMC5C",
+      "title": "計算機概論期中考",
+      "allDay": false,
+      "start": "2026-11-04T13:40:00+08:00",
+      "end": "2026-11-04T15:30:00+08:00",
+      "startDate": "2026-11-04",
+      "endDate": "2026-11-04",
+      "location": null,
+      "note": null,
+      "private": false,
+      "group": "工作群"
+     },
+     {
+      "id": "01M6346ED5ENFRKGN1AZHVANFM",
+      "title": "電路學期中考",
+      "allDay": false,
+      "start": "2026-11-05T08:10:00+08:00",
+      "end": "2026-11-05T10:00:00+08:00",
+      "startDate": "2026-11-05",
+      "endDate": "2026-11-05",
+      "location": "\"\"",
+      "note": null,
+      "private": false,
+      "group": "工作群"
+     },
+     {
+      "id": "01M65E80CKSCMQDC9MZ22CAB5K",
+      "title": "中國書法入門期中考",
+      "allDay": false,
+      "start": "2026-11-05T10:10:00+08:00",
+      "end": "2026-11-05T12:00:00+08:00",
+      "startDate": "2026-11-05",
+      "endDate": "2026-11-05",
+      "location": null,
+      "note": "完成約35*35cm斗方一件，內文「當天才宣布」，落款至少包含考生姓名並預留鈐印位置（印章約1.5*1.5cm）；注意布局；務必寫在宣紙上，紙張與工具自備；可參考紙本字帖，不可用電子儀器尋字，違者視同作弊；補交10月29日「秋風起兮白雲飛」或「明月松間清泉石上」作業者，於應試時繳交；請假者向教務處申請。",
+      "private": false,
+      "group": "工作群"
+     },
+     {
+      "id": "01M639A713KJTJQERY9ZZM3CTQ",
+      "title": "科學計算期中考",
+      "allDay": false,
+      "start": "2026-11-09T13:40:00+08:00",
+      "end": "2026-11-09T16:30:00+08:00",
+      "startDate": "2026-11-09",
+      "endDate": "2026-11-09",
+      "location": null,
+      "note": null,
+      "private": false,
+      "group": "工作群"
+     },
+     {
+      "id": "01M63P1P3BC9VYMSS1P5D6T3QE",
+      "title": "胖胖找國中老師",
+      "allDay": false,
+      "start": "2026-11-11T14:00:00+08:00",
+      "end": "2026-11-11T16:00:00+08:00",
+      "startDate": "2026-11-11",
+      "endDate": "2026-11-11",
+      "location": null,
+      "note": null,
+      "private": true,
+      "group": null
+     },
+     {
+      "id": "01M6WQ1WT4NH9Y0J60KETJX7VK",
+      "title": "吃生日蛋糕",
+      "allDay": false,
+      "start": "2026-11-13T18:00:00+08:00",
+      "end": "2026-11-13T23:00:00+08:00",
+      "startDate": "2026-11-13",
+      "endDate": "2026-11-13",
+      "location": null,
+      "note": null,
+      "private": true,
+      "group": null
+     },
+     {
+      "id": "01M5Y00Q92W99921J2D4H0BHVZ",
+      "title": "研討會",
+      "allDay": true,
+      "start": null,
+      "end": null,
+      "startDate": "2026-12-26",
+      "endDate": "2026-12-26",
+      "location": "師大",
+      "note": null,
+      "private": false,
+      "group": "工作群"
+     }
+    ],
+    "tasks": [
+     {
+      "id": "01M634SE9VP1DHG3GVJ5HA2S9R",
+      "title": "看廖老師給的論文",
+      "dueDate": "2026-11-06",
+      "dueTime": "12:00",
+      "done": false,
+      "private": false,
+      "group": "工作群",
+      "note": "期中考後閱讀，論文由廖老師提供\nTIA 組：跨阻放大器（Transimpedance Amplifier）\n類比 IC 設計，把光偵測器的微小電流轉成電壓，是光通訊接收端的第一級電路。\n\nAI 組：AI 硬體加速器\n神經網路怎麼在硬體上高效率運算。（學長）\n\nCPO 組：共封裝光學（Co-Packaged Optics）\n把光學引擎和交換器晶片封裝在一起，縮短電訊號傳輸距離，降低資料中心的功耗和延遲。"
+     },
+     {
+      "id": "01M5XZT3WGB9ET6BHHZ00Q13MG",
+      "title": "下載 iplot，測試每一個 package，交出找到的 bug",
+      "dueDate": "2026-11-08",
+      "dueTime": null,
+      "done": false,
+      "private": false,
+      "group": "工作群",
+      "note": "每一個 package 都要測試一遍，把找到的 bug 交出來"
+     },
+     {
+      "id": "01M6QEX2A9Z0YAK0VHWVM02KW2",
+      "title": "去拿感謝信的信紙",
+      "dueDate": "2026-11-09",
+      "dueTime": null,
+      "done": false,
+      "private": true,
+      "group": null,
+      "note": null
+     },
+     {
+      "id": "01M6X5XB2QZ6B3FDSNTZFW7K2X",
+      "title": "交科學計算作業四",
+      "dueDate": "2026-11-16",
+      "dueTime": "13:30",
+      "done": false,
+      "private": true,
+      "group": null,
+      "note": null
+     },
+     {
+      "id": "01M6001BMAK7FMGBFC3GTQHFR4",
+      "title": "寫師大研討會規劃",
+      "dueDate": null,
+      "dueTime": null,
+      "done": false,
+      "private": false,
+      "group": "工作群",
+      "note": null
+     },
+     {
+      "id": "01M6001D04D8CBVPMA58NX100S",
+      "title": "寫iPLoT架構",
+      "dueDate": null,
+      "dueTime": null,
+      "done": false,
+      "private": false,
+      "group": "工作群",
+      "note": null
+     },
+     {
+      "id": "01M6NNR29QY8SGFWHCN70WG5QE",
+      "title": "整理傅立葉系列筆記（雷達應用）",
+      "dueDate": null,
+      "dueTime": null,
+      "done": false,
+      "private": false,
+      "group": "工作群",
+      "note": "涵蓋傅立葉級數、傅立葉分析、傅立葉轉換、快速傅立葉轉換；從多個頻率的角度介紹，重點是每個步驟所代表的物理現象意義，而不是數學計算。對雷達系統很重要。"
+     },
+     {
+      "id": "01M6YK9NS0VFHHXTV0B3FENJZG",
+      "title": "預約慈濟神內門診",
+      "dueDate": null,
+      "dueTime": null,
+      "done": false,
+      "private": true,
+      "group": null,
+      "note": null
+     },
+     {
+      "id": "01M5PVHEXMVQX945TMXCKSWGDC",
+      "title": "吃簡偉恆雞雞",
+      "dueDate": "2026-10-26",
+      "dueTime": "20:00",
+      "done": true,
+      "private": false,
+      "group": "工作群",
+      "note": null
+     },
+     {
+      "id": "01M5Q8EPX64YSWK8RWJWWWZP70",
+      "title": "拯救毛筆",
+      "dueDate": "2026-11-01",
+      "dueTime": null,
+      "done": true,
+      "private": true,
+      "group": null,
+      "note": null
+     },
+     {
+      "id": "01M62Q7NTWGVA28YK2DAHXGNS5",
+      "title": "買宣紙",
+      "dueDate": "2026-11-04",
+      "dueTime": null,
+      "done": true,
+      "private": true,
+      "group": null,
+      "note": null
+     }
+    ],
+    "logs": [],
+    "moods": [
+     {
+      "date": "2026-11-07",
+      "face": "grin",
+      "emoji": "😄",
+      "text": "今天很開心"
+     }
+    ],
+    "jots": []
+   }
+  }
+ ]
+}
