@@ -227,5 +227,23 @@
         181314545
       ]
     ]
+  },
+  "lean": {
+    "name": "Lean",
+    "owner_id": 71483597,
+    "owner": "william10310406",
+    "version": "0.1.0",
+    "notes": "第一版：按下去用瀏覽器打開「Lean 實數遊戲」——只用 Lean，從自然數一路蓋到實數，再證不等式與極限（遊戲內容是英文）。遊戲跑在 adam.math.hhu.de 的公開伺服器上，需要網路、不用安裝；進度存在瀏覽器裡。",
+    "issue": 25,
+    "updated": "2026-11-10",
+    "license": "MIT",
+    "license_issue": 25,
+    "copyright": [
+      [
+        2026,
+        "Wei-Heng Chien (簡偉恆)",
+        71483597
+      ]
+    ]
   }
 }
