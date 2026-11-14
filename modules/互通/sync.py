@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import shortcut
+from boot import plain
 
 from core import scan
 from core.text import SYSTEM_MODULE
@@ -110,7 +111,7 @@ def sync(home: Path, config: Config, python: str, folder: Path, platform: str = 
             else:
                 (folder / ERRORS).unlink(missing_ok=True)
         except OSError as exc:
-            problems.append(f"紀錄寫不進去：{exc}")
+            problems.append(f"紀錄寫不進去：{plain(exc)}")
         return problems
     finally:
         lock.unlink(missing_ok=True)

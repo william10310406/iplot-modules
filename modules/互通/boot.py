@@ -6,6 +6,7 @@ run.py 一開始就用這個檔，那時候跑的可能是系統內建的舊 Pyt
 from __future__ import annotations
 
 import contextlib
+import errno
 import importlib
 import os
 import re
@@ -24,6 +25,20 @@ STILL = "換成記下的 Python（{exe}）還是開不起來：{reason}。在面
 VERSION = "互通 {mine} 支援 iPLoT 0.5、0.6，這台是 {found}。iPLoT 比較舊就按「更新」，比較新就到工作坊看看互通有沒有新版。"
 ALERT = ["osascript", "-e", "on run argv",
          "-e", "display alert (item 1 of argv) message (item 2 of argv) as critical", "-e", "end run"]
+
+
+REASONS = {errno.ENOSPC: "磁碟滿了", errno.EACCES: "沒有權限", errno.EPERM: "沒有權限", errno.EROFS: "資料夾是唯讀的",
+           errno.ENOENT: "找不到檔案或資料夾", errno.ENOTDIR: "路徑上有一段不是資料夾", errno.ENAMETOOLONG: "名稱太長"}
+
+
+def plain(exc: BaseException) -> str:
+    """寫檔、改檔、做捷徑失敗的原因：一句中文，不貼系統的英文原文（Permission denied、codec can't decode…）（體驗 7-01）。
+    互通支援核心 0.5 與 0.6，用不到之後才有的 core.errors.reason，所以這裡自己帶一份。"""
+    if isinstance(exc, UnicodeError):
+        return "檔案不是 UTF-8 的文字"
+    if isinstance(exc, OSError):
+        return REASONS.get(exc.errno, "系統不讓寫入或打開")
+    return "內容讀不懂"
 
 
 def iplot_home(run_file: str) -> Path | None:

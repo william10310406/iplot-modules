@@ -15,7 +15,7 @@ import subprocess
 import unicodedata
 from pathlib import Path
 
-from boot import python_app
+from boot import plain, python_app
 
 FOLDER = "捷徑"
 MAX_NAME_BYTES = 200  # 檔名上限是 255 bytes；留給「.app」與做的時候的「.tmp-」
@@ -152,7 +152,7 @@ def sync(base: Path, wanted: dict[str, Path], python: str, run: Path, sips=subpr
         try:
             shutil.rmtree(base / f"{name}.app")
         except OSError as exc:
-            problems.append(f"捷徑「{name}」：拿不掉：{exc}")
+            problems.append(f"捷徑「{name}」：拿不掉：{plain(exc)}")
     for name, module in wanted.items():
         now = _now(module, python, run)
         if name in have and all(have[name].get(k) == now[k] for k in KEYS):
@@ -160,5 +160,5 @@ def sync(base: Path, wanted: dict[str, Path], python: str, run: Path, sips=subpr
         try:
             write(base, name, module, python, run, sips)
         except OSError as exc:
-            problems.append(f"捷徑「{name}」：做不出來：{exc}")
+            problems.append(f"捷徑「{name}」：做不出來：{plain(exc)}")
     return problems

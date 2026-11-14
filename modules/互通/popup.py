@@ -19,6 +19,7 @@ from core.types import ErrorInfo, Scope
 PAGE = Path(__file__).with_name("popup.html")
 PANEL = "主控面板"  # 跑完之後底下那一列的回去鈕：最上層剛好一個「行事曆」就回行事曆（D93），否則回主控面板（D88）
 CALENDAR = "行事曆"
+CANCELLED = "模組『{module}』已取消"  # 提問框按了取消（體驗 7-06）；核心 0.5 沒有 InputCancelled，那邊照舊是錯誤
 
 
 def mac_dock(regular: bool) -> None:
@@ -260,7 +261,10 @@ class Popup:
         self._js("log", text)
 
     def report(self, error: ErrorInfo) -> None:
-        """顯示錯誤：白話一句、「打開檔案」、「詳細」（traceback）。"""
+        """顯示錯誤：白話一句、「打開檔案」、「詳細」（traceback）。在提問框按取消不是錯誤，只說一行「已取消」。"""
+        if error.kind == "InputCancelled":
+            self.log(CANCELLED.format(module=error.module))
+            return
         self._reveal()
         self.errors.append(error)
         self._js("report", {"kind": error.kind, "message": error.message,

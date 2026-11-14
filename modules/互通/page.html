@@ -94,6 +94,7 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
 let current = null;
+const FAILED = "這次沒做成。再按一次；還是不行就關掉這個視窗，在面板再按一次「互通」。";  // 呼叫 Python 失敗：說一句話，不是留著「同步中…」
 
 function fill(list, items, render) {
   list.replaceChildren();
@@ -163,6 +164,9 @@ $("patch").onclick = () => {
       li.textContent = p;
       list.append(li);
     }
+  }).catch(() => {
+    $("patchResult").hidden = false;
+    $("patchResult").textContent = FAILED;
   }).finally(() => { $("patch").disabled = false; });
 };
 $("resync").onclick = () => {
@@ -171,7 +175,7 @@ $("resync").onclick = () => {
   window.pywebview.api.resync().then((data) => {
     draw(data);
     $("syncing").textContent = "同步好了";
-  }).finally(() => { $("resync").disabled = false; });
+  }).catch(() => { $("syncing").textContent = FAILED; }).finally(() => { $("resync").disabled = false; });
 };
 </script>
 </body>

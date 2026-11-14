@@ -131,10 +131,13 @@ class Api:
         self._app.reveal(self._folder / shortcut.FOLDER)
 
     def copy(self, text: str) -> bool:
-        """「複製」：把指令放進剪貼簿（macOS 的 pbcopy）；別的系統回 False，頁面說一句「請自己選取複製」。"""
+        """「複製」：把指令放進剪貼簿（macOS 的 pbcopy）；別的系統、或叫不起來回 False，頁面說一句「請自己選取複製」。"""
         if sys.platform != "darwin":
             return False
-        subprocess.run(["pbcopy"], input=str(text).encode(), check=False)
+        try:
+            subprocess.run(["pbcopy"], input=str(text).encode(), check=False)
+        except OSError:  # 叫不起來：頁面說「請自己選取上面那一行複製」，不是按了沒反應（體驗 7-03）
+            return False
         return True
 
     def resync(self) -> dict:
@@ -147,6 +150,7 @@ class Api:
         """「加上（N 個檔）」：不收頁面給的任何東西，在這裡重新算一次候選（candidates），每一個用 snippet.add 加上
         （它先存快照）。回補了哪些、問題（一個一句）、新的狀態，頁面用 textContent 重畫。"""
         import snippet
+        from boot import plain
 
         done, problems = [], []
         for info, titles in candidates(self._home, self._config):
@@ -157,7 +161,7 @@ class Api:
             except SyntaxError:
                 problems.append(f"{name}：有語法錯誤，沒補")
             except (OSError, ValueError) as exc:
-                problems.append(f"{name}：沒補：{exc}")
+                problems.append(f"{name}：沒補：{plain(exc)}")
         return {"patched": done, "problems": problems,
                 "status": status(self._home, self._config, self._python, self._folder)}
 

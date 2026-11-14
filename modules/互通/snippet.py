@@ -6,7 +6,9 @@
 
 import ast
 import io
+import os
 import re
+import shutil
 from pathlib import Path
 
 from core.history import snapshot
@@ -73,5 +75,11 @@ def add(path: Path, keep: int) -> bool:
     after_import = any(isinstance(n, (ast.Import, ast.ImportFrom)) and n.end_lineno == at for n in ast.parse(text).body)
     lines[at:at] = [(newline if after_import else "") + TEXT.replace("\n", newline)]  # 接在 import 後面空一行（ruff 的 I001）
     snapshot(path, keep)
-    path.write_bytes((BOM if bom else b"") + "".join(lines).encode("utf-8"))
+    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}")  # 先寫暫存再換上去：寫到一半失敗，原來的檔完好（體驗 7-05）
+    try:
+        tmp.write_bytes((BOM if bom else b"") + "".join(lines).encode("utf-8"))
+        shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
     return True
