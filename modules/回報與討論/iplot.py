@@ -332,8 +332,8 @@ def _unreadable(exc: Exception, draft: str, ctx: redact.Ctx) -> str:
     """草稿讀不回來時訊息區的那一句（不開瀏覽器）：編碼不對的草稿還在，叫人這次存成 UTF-8；刪掉了的就只叫人再試一次。
     不提任何一顆鈕：「回報這個問題」（on_error）與選單的「1」（run）都走 _by_file，兩邊按的不一樣。"""
     if isinstance(exc, UnicodeDecodeError):  # 它的字只有編碼的名字、那個位元組與位置，沒有路徑：不經過 _why
-        return (f"讀不回草稿（{exc}），沒有送出；改過的草稿留在 回報/{draft}，請再試一次（會開新的一份），"
-                "這次存成 UTF-8。")
+        return (f"讀不回草稿（草稿的編碼不是 UTF-8），沒有送出；改過的草稿留在 回報/{draft}，請再試一次（會開新的一份），"
+                "這次存成 UTF-8。")  # 解碼器的英文原文（codec、位元組、位置）不給人看
     return f"讀不回草稿（{_why(exc, ctx)}），沒有送出；請再試一次（會開新的一份）。"
 
 

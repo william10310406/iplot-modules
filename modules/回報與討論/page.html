@@ -48,7 +48,7 @@ button:disabled { opacity: .5; }
 </head>
 <body>
 <section id="menu">
-  <p class="notice">論壇是公開的，任何人都看得到。「回報問題」會先讓你看過、改過要送出的內容；其他三個直接用瀏覽器打開。</p>
+  <p class="notice">論壇是公開的，任何人都看得到。「回報問題」會先讓你看過、改過要送出的內容；其他三個直接用瀏覽器打開。回報問題、提建議、問問題都要有 GitHub 帳號（免費，到 github.com 註冊）；看論壇不用。</p>
   <label for="module">回報問題（畫面不對、太慢、結果不對，沒有出現錯誤訊息的）：相關的模組</label>
   <div class="row"><select id="module"><option value="">（不指定模組）</option></select><button id="report" type="button" disabled>回報問題</button></div>
   <p class="note" id="last" hidden></p>
@@ -66,7 +66,7 @@ button:disabled { opacity: .5; }
   <label for="body">內文</label>
   <textarea id="body" spellcheck="false"></textarea>
   <p class="note" id="length">量網址長度中…</p>
-  <p class="login"><b>按之前先確認這台電腦的瀏覽器已經登入 GitHub。</b> 沒登入的話，登入之後 GitHub 可能出錯、填好的內容會不見；那時候直接貼上剪貼簿裡的就好。</p>
+  <p class="login"><b>按之前先確認這台電腦的瀏覽器已經登入 GitHub。</b> 沒登入的話，登入之後 GitHub 可能出錯、填好的內容會不見；那時候直接貼上剪貼簿裡的就好。還沒有 GitHub 帳號：先到 github.com 免費註冊；不想註冊的話，按「複製整份報告」，貼到 Email 或訊息傳給幫你的人。</p>
   <p class="warning" id="warning"></p>
   <p class="row"><button id="open" type="button" disabled>在瀏覽器打開</button><button id="copy" class="plain" type="button" disabled>複製整份報告</button></p>
   <p id="result"></p>
