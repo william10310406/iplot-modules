@@ -1,7 +1,9 @@
 """Lean 實數遊戲：只用 Lean，從自然數一路蓋到實數，再證不等式與極限。遊戲在網路上，不用安裝。"""
 import http.client
 import os
+import socket
 import ssl
+import urllib.error
 import urllib.request
 import webbrowser
 
@@ -28,13 +30,25 @@ def _context():
     return context
 
 
+def plain(exc: BaseException) -> str:
+    """連不上的原因：一句中文，不貼 Python 的英文原文與例外名稱（體驗 8e-01）。"""
+    reason = getattr(exc, "reason", exc)
+    if isinstance(exc, urllib.error.HTTPError):
+        return f"網站回了錯誤 {exc.code}"
+    if isinstance(exc, ssl.SSLError) or isinstance(reason, ssl.SSLError):
+        return "網站的憑證驗證不過，看一下電腦的日期與時間對不對"
+    if isinstance(exc, (TimeoutError, socket.timeout)) or isinstance(reason, (TimeoutError, socket.timeout)):
+        return "連線逾時"
+    return "連不到那個網站，可能沒有網路"
+
+
 def unreachable(url: str = CHECK_URL, timeout: float = TIMEOUT) -> str | None:
     """連得上回 None；連不上回一句原因（給人看的，不是 traceback）。"""
     try:
         with urllib.request.urlopen(url, timeout=timeout, context=_context()) as response:
             response.read(1)
     except NETWORK as exc:
-        return str(getattr(exc, "reason", "") or exc) or type(exc).__name__
+        return plain(exc)
     return None
 
 

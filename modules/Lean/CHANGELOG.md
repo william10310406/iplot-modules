@@ -2,6 +2,13 @@
 
 「Lean」這個模組的版本紀錄，格式跟 iPLoT 的 CHANGELOG.md 一樣（[Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)）。`tools/publish.py` 取最上面那一節的版本號當工作坊裡的版本，取那一節的第一段當清單頁上的「這一版」。
 
+## [Unreleased]
+
+## [0.1.1] - 2026-11-15
+
+### 修正
+- 連不上 adam.math.hhu.de 時，括號裡的原因是中文（逾時、沒有網路、憑證、網站回了錯誤），不再貼 Python 的英文。
+
 ## [0.1.0] - 2026-11-10
 
 第一版：按下去用瀏覽器打開「Lean 實數遊戲」——只用 Lean，從自然數一路蓋到實數，再證不等式與極限（遊戲內容是英文）。遊戲跑在 adam.math.hhu.de 的公開伺服器上，需要網路、不用安裝；進度存在瀏覽器裡。
