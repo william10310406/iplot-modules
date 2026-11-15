@@ -6,6 +6,7 @@ from __future__ import annotations
 import ast
 import collections
 import contextlib
+import errno
 import importlib.util
 import json
 import os
@@ -134,9 +135,13 @@ def read_course(folder: Path) -> Course:
         tree = ast.parse(file.read_text(encoding="utf-8-sig"), str(file))
     except SyntaxError as exc:
         where = f"第 {exc.lineno} 行" if exc.lineno else "某一行"
-        raise CourseError(f"{MARK} 的{where}語法不對：{exc.msg}") from exc
-    except (OSError, ValueError) as exc:  # 讀不到、不是 UTF-8、含 NUL 位元組
-        raise CourseError(f"讀不了 {folder.name}/{MARK}：{exc}") from exc
+        raise CourseError(f"{MARK} 的{where}語法不對：檢查那一行的括號、引號有沒有成對，名字後面是不是 = 值") from exc
+    except UnicodeDecodeError as exc:
+        raise CourseError(f"讀不了 {folder.name}/{MARK}：不是 UTF-8。用文字編輯器打開它，另存成 UTF-8 再按一次") from exc
+    except OSError as exc:  # 讀不到：中文原因，不貼系統的英文（體驗 8g-03）
+        raise CourseError(f"讀不了 {folder.name}/{MARK}：{_why(exc)}") from exc
+    except ValueError as exc:  # 含 NUL 位元組
+        raise CourseError(f"讀不了 {folder.name}/{MARK}：檔裡有不能出現的字元。用文字編輯器打開它，把怪字元拿掉") from exc
     values: dict[str, object] = {}
     for node in tree.body:
         if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) \
@@ -255,9 +260,13 @@ def ensure_venv(venv_dir: Path, say, popen=subprocess.Popen, python: str = sys.e
     if os.environ.get(NO_INSTALL):
         raise RuntimeError(f"{NO_INSTALL}：不建 .venv")
     say(f"在{'重建' if clear else '建'} {venv_dir.parent.name}/{venv_dir.name} …")
-    code = popen([str(python), "-m", "venv", *(["--clear"] if clear else []), str(venv_dir)]).wait()
+    try:
+        code = popen([str(python), "-m", "venv", *(["--clear"] if clear else []), str(venv_dir)]).wait()
+    except OSError:
+        code = "找不到 Python"
     if code != 0:
-        raise RuntimeError(f"建不了 {venv_dir}：代碼 {code}")
+        raise RuntimeError(f"建不了 {venv_dir}（{'代碼 ' if isinstance(code, int) else ''}{code}）。"
+                           "確認這個 Python 有 venv 功能、磁碟還有空間，再按一次")
     return exe
 
 
@@ -361,8 +370,17 @@ def homeworks(course: Course) -> list[tuple[str, Path]]:
     return [(code, file) for _, code, file in sorted(found)]
 
 
+REASONS = {errno.ENOSPC: "磁碟滿了", errno.EACCES: "沒有權限", errno.EPERM: "沒有權限", errno.EROFS: "資料夾是唯讀的",
+           errno.ENOENT: "找不到檔案或資料夾", errno.ENOTDIR: "路徑上有一段不是資料夾", errno.ENAMETOOLONG: "名稱太長"}
+
+
+def _why(exc: OSError) -> str:
+    """OSError 的原因：一句中文，不貼系統的英文（Permission denied 等）（體驗 8g-01）。"""
+    return REASONS.get(exc.errno, "系統不讓讀或寫")
+
+
 def _unreadable(file: Path, exc: OSError) -> str:
-    return f"讀不了 {file.name}（{exc.strerror or exc}）"
+    return f"讀不了 {file.name}（{_why(exc)}）"
 
 
 def _os_problem(exc: OSError, file: Path | None, course_folder: Path) -> str:
@@ -370,13 +388,13 @@ def _os_problem(exc: OSError, file: Path | None, course_folder: Path) -> str:
     才說「讀不了 <作業檔>」（D147）。"""
     where = Path(os.path.abspath(exc.filename)) if exc.filename else None
     if where is None or (file is not None and where == Path(os.path.abspath(file))):
-        return _unreadable(file, exc) if file is not None else f"出了問題（{exc.strerror or exc}）"
+        return _unreadable(file, exc) if file is not None else f"出了問題（{_why(exc)}）"
     base = Path(os.path.abspath(course_folder)).parent
     try:
         shown = where.relative_to(base).as_posix()
     except ValueError:
         shown = str(where)
-    return f"{shown} 有問題（{exc.strerror or exc}）"
+    return f"{shown} 有問題（{_why(exc)}）"
 
 
 def _kind_of(file: Path, kinds: list[ModuleType]) -> ModuleType | None:
@@ -465,6 +483,8 @@ def _course_button(app, folder: Path, popen, apple_silicon: bool | None) -> None
         return
     ok, failed = install(python, need, say=app.log, popen=popen)
     said = summary_of_install(ok, failed)
+    if failed:  # 沒裝好的多半是網路：說下一步（體驗 8g-05）
+        said += f"。網路正常的話，再按一次「{course.name}」，只會補沒裝好的"
     if len(pending) > 1:
         later = pending[1]
         said += f"；{later[0].rstrip('：')}{'（' + later[2] + '）' if later[2] else ''}再按一次「{course.name}」"
@@ -697,7 +717,7 @@ def _ready(app, course: Course, code: str, need: list[str], popen, apple: bool, 
         ok, failed = install(python, lack, say=app.log, popen=popen)
         app.log(summary_of_install(ok, failed))
         if failed:
-            app.log(f"{code} 要的套件沒裝齊，沒跑")
+            app.log(f"{code} 要的套件沒裝齊，沒跑。網路正常的話，再按一次，只會補沒裝好的")
             return False
     return True
 
@@ -888,12 +908,17 @@ def new_course(app, root: Path) -> None:
     if folder.exists() or folder.is_symlink():
         app.log(f"已經有叫「{name}」的資料夾了，沒有新增（不會蓋掉）")
         return
-    template = (HERE / "範本" / MARK).read_text(encoding="utf-8")
-    folder.mkdir()
-    text = re.sub(r'^NAME = "[^"\n]*"', lambda _: f"NAME = {json.dumps(name, ensure_ascii=False)}", template,
-                  count=1, flags=re.MULTILINE)
-    (folder / MARK).write_text(text, encoding="utf-8", newline="\n")
-    _course_buttons(folder, name)
+    try:
+        template = (HERE / "範本" / MARK).read_text(encoding="utf-8")
+        folder.mkdir()
+        text = re.sub(r'^NAME = "[^"\n]*"', lambda _: f"NAME = {json.dumps(name, ensure_ascii=False)}", template,
+                      count=1, flags=re.MULTILINE)
+        (folder / MARK).write_text(text, encoding="utf-8", newline="\n")
+        _course_buttons(folder, name)
+    except OSError as exc:  # 做到一半：拿掉剛建的資料夾，不留半門課（它擋著同名再建）（體驗 8g-04）
+        shutil.rmtree(folder, ignore_errors=True)
+        app.log(f"沒有新增「{name}」：{_why(exc)}。處理好之後再按一次")
+        return
     app.rescan()
     app.log(f"已新增「{name}」：按它旁邊的 ▸ 進去，「新增作業」建第一份作業")
 
@@ -913,10 +938,15 @@ def add_example(app, root: Path) -> None:
     except CourseError as exc:
         app.log(f"範例課程 {EXAMPLE}：{exc}")
         return
-    shutil.copytree(src, dest, ignore=shutil.ignore_patterns("__pycache__"))
-    for code, file in homeworks(course):
-        write_stub(dest / file.parent.relative_to(src), code, *HOMEWORK_STUB)
-    _course_buttons(dest, course.name)
+    try:
+        shutil.copytree(src, dest, ignore=shutil.ignore_patterns("__pycache__"))
+        for code, file in homeworks(course):
+            write_stub(dest / file.parent.relative_to(src), code, *HOMEWORK_STUB)
+        _course_buttons(dest, course.name)
+    except OSError as exc:  # 做到一半：拿掉複製到一半的，不留半門課（體驗 8g-04）
+        shutil.rmtree(dest, ignore_errors=True)
+        app.log(f"沒有加入「{course.name}」：{_why(exc)}。處理好之後再按一次")
+        return
     app.rescan()
     app.log(f"已加入「{course.name}」：{len(homeworks(course))} 份作業，不用裝；按它旁邊的 ▸ 進去")
 
@@ -947,8 +977,13 @@ def new_homework(app, course_folder: Path) -> None:
     if n in have or folder.exists() or folder.is_symlink():
         app.log(f"已經有 {code}（資料夾 {have.get(n, folder.name)}）了，沒有新增（不會蓋掉）")
         return
-    file = kind.new(folder, code)
-    write_stub(folder, code, *HOMEWORK_STUB)
+    try:
+        file = kind.new(folder, code)
+        write_stub(folder, code, *HOMEWORK_STUB)
+    except OSError as exc:  # 做到一半：拿掉剛建的作業資料夾（不然同代號再建會說「已經有」）（體驗 8g-04）
+        shutil.rmtree(folder, ignore_errors=True)
+        app.log(f"沒有新增 {code}：{_why(exc)}。處理好之後再按一次")
+        return
     app.edit(file)
     app.rescan()
     app.log(f"已新增 {code}：{folder.name}/{file.name}，編輯器打開了")
