@@ -6,6 +6,7 @@
 這個檔只用標準庫、不 import core：直接 python3 iplot.py 時也載得進來。"""
 
 import datetime
+import errno
 import json
 import os
 import re
@@ -27,6 +28,15 @@ SNAPSHOT_EVERY = datetime.timedelta(minutes=10)  # 同一個欄位的上一份�
 
 def _now() -> datetime.datetime:
     return datetime.datetime.now()
+
+
+REASONS = {errno.ENOSPC: "磁碟滿了", errno.EACCES: "沒有權限", errno.EPERM: "沒有權限", errno.EROFS: "資料夾是唯讀的",
+           errno.ENOENT: "找不到檔案或資料夾", errno.ENOTDIR: "路徑上有一段不是資料夾", errno.ENAMETOOLONG: "名稱太長"}
+
+
+def reason(exc: OSError) -> str:
+    """OSError 變成一句中文原因，不貼系統的英文（Permission denied 等）；認不得的用籠統的一句（體驗 6-01）。"""
+    return REASONS.get(exc.errno, "系統不讓寫入或打開")
 
 
 def parse_date(text: str) -> datetime.date:

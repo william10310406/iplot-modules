@@ -111,7 +111,7 @@ const call = (name, ...args) => {
   const p = last.then(() => window.pywebview.api[name](...args));
   last = p.catch(() => null);
   return p.then((r) => { if (r && r.error) say(r.error, true); return r || {}; },
-                (e) => { say(String(e && e.message || e), true); return { error: String(e) }; });
+                (e) => { console.error(e); say("剛才的動作沒做成。再做一次；還是不行就關掉行事曆再打開。", true); return { error: String(e) }; });
 };
 const say = (text, bad) => { $("status").textContent = text || ""; $("status").className = bad ? "bad" : ""; };
 
@@ -161,6 +161,12 @@ async function showMonth() {
   }
   if (row.children.length) table.append(row);
   $("view").replaceChildren(table);
+  const was = $("status").textContent, mine = was.startsWith("這個月還沒有內容") || was.startsWith("找不到資料夾「");  // 只清自己上一次說的
+  if (r.missing) say("找不到資料夾「" + r.folder + "」（外接碟沒接上？）。接上之後按「今天」，或按 ⚙ 換一個資料夾", true);
+  else {
+    if (mine) say("");
+    if (!Object.keys(r.days).length && !$("status").textContent) say("這個月還沒有內容。單擊某一天，就可以寫行程、心情，或加照片");
+  }
 }
 
 async function showYear() {
@@ -245,6 +251,7 @@ function addFiles(files) {
       if (day && day.date === date && r.images) photoRow(r.images);
       if (!r.error) say("已加入：" + file.name);
     };
+    reader.onerror = () => say("讀不到「" + file.name + "」。確認檔案還在、有權限打開，再加一次", true);
     reader.readAsDataURL(file);
   }
 }
@@ -259,7 +266,7 @@ async function showDay() {
   box.append(el("h2", "", cur.getFullYear() + " 年 " + (cur.getMonth() + 1) + " 月 " + cur.getDate() + " 日"));
   const moods = el("div", "moods");
   if (day.unreadable["心情"]) {
-    box.append(el("p", "unreadable", "讀不到這個檔（不是 UTF-8），沒有覆寫它：" + day.unreadable["心情"]));
+    box.append(el("p", "unreadable", "讀不到這個檔（不是 UTF-8），沒有覆寫它。用文字編輯器打開它、另存成 UTF-8，再回到這一天：" + day.unreadable["心情"]));
   } else {
     for (const m of MOODS) {
       const b = el("button", m === day.mood ? "on" : "", m);
@@ -281,7 +288,7 @@ async function showDay() {
   for (const [key, label] of FIELDS) {
     box.append(el("label", "field", label));
     if (day.unreadable[key]) {
-      box.append(el("p", "unreadable", "讀不到這個檔（不是 UTF-8），沒有覆寫它：" + day.unreadable[key]));
+      box.append(el("p", "unreadable", "讀不到這個檔（不是 UTF-8），沒有覆寫它。用文字編輯器打開它、另存成 UTF-8，再回到這一天：" + day.unreadable[key]));
       continue;
     }
     const t = el("textarea");
@@ -351,7 +358,7 @@ async function publish() {
     if (r.note) say(r.note);
     return;
   }
-  $("askText").textContent = "要放上網路的有 " + s.public_days + " 天（只有打開『公開』的日子）。產生發佈用的資料夾？";
+  $("askText").textContent = "打開『公開』的有 " + s.public_days + " 天。要產生發佈用的資料夾嗎？這一步不會上傳任何東西；發佈/ 裡原有的檔會換成新產生的，自己放進去的檔會被刪掉。";
   $("ask").hidden = false;
 }
 
@@ -402,7 +409,7 @@ function wire() {
   });
   $("reveal").addEventListener("click", () => call("reveal_folder"));
   $("openIndex").addEventListener("click", () => call("open_page", "index", ""));
-  $("rebuild").addEventListener("click", async () => { const r = await call("rebuild"); if (!r.error) say("重建了 " + r.pages + " 頁"); });
+  $("rebuild").addEventListener("click", async () => { say("重建中…"); const r = await call("rebuild"); if (!r.error) say("重建了 " + r.pages + " 頁"); });
   $("panel").addEventListener("click", () => call("launch", "主控面板"));
   $("files").addEventListener("change", (e) => { if (day) addFiles(e.target.files); e.target.value = ""; });
   window.addEventListener("focus", onFocus);  // 重掃模組列（設計第 15 節第 7 條）、過了午夜換「今天」

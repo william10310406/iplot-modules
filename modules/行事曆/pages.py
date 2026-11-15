@@ -25,7 +25,7 @@ RECENT = 30
 CELL_CHARS = 20
 RECENT_IMAGES = 4
 LABELS = (("行程", "行程"), ("看到", "看到了什麼"), ("做了", "做了什麼"))
-UNREADABLE = "讀不到這個檔（不是 UTF-8），沒有覆寫它"
+UNREADABLE = "讀不到這個檔（不是 UTF-8），沒有覆寫它。用文字編輯器另存成 UTF-8，重建網頁就看得到"
 NO_HEIC = "這張是 HEIC，Chrome 看不到（Safari 看得到）"
 EMPTY_DAY = "這一天沒有內容"
 NOT_PUBLISHED = "{date} {name}：沒放上網路：{why}"
@@ -300,7 +300,7 @@ def _publish_images(root: Path, out: Path, days: list[str], run, platform: str, 
                 if not dst.exists() or src.stat().st_mtime > dst.stat().st_mtime:
                     photos.public_copy(src, dst, run=run, platform=platform)
             except (ValueError, OSError) as exc:
-                problems.append(NOT_PUBLISHED.format(date=date, name=name, why=exc))
+                problems.append(NOT_PUBLISHED.format(date=date, name=name, why=diary.reason(exc) if isinstance(exc, OSError) else exc))
                 skip.add((date, name))
                 continue
             wanted.add(dst)
