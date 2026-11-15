@@ -1,4 +1,5 @@
 """主控面板：打開 iPLoT 的面板；已經開著就叫到最前面。任何模組寫 app.run("主控面板") 就會用到這裡。"""
+import errno
 import os
 import pathlib
 import re
@@ -36,6 +37,10 @@ HELPER = ("import sys\n"
           "app = AppKit.NSRunningApplication.runningApplicationWithProcessIdentifier_(int(sys.argv[2]))\n"
           "sys.exit(0 if app is not None and app.activateWithOptions_("
           "AppKit.NSApplicationActivateIgnoringOtherApps) else 1)\n")
+
+
+REASONS = {errno.ENOENT: "找不到 Python 或 iPLoT 的 main.py", errno.EACCES: "沒有權限", errno.EPERM: "沒有權限",
+           errno.ENOMEM: "記憶體不夠", errno.EAGAIN: "系統現在開不了新的程式"}
 
 
 def in_panel(modules=sys.modules) -> bool:
@@ -130,12 +135,12 @@ def open_panel(app, home: pathlib.Path, *, modules=None, ps=_ps, lsof=_lsof, pop
         return
     pid = find_panel(home, ps, lsof, me) if platform == "darwin" else None
     if pid is not None:
-        app.log("主控面板已經開著，叫到最前面了" if activate(pid, platform) else "主控面板已經開著，但沒辦法把它叫到最前面")
+        app.log("主控面板已經開著，叫到最前面了" if activate(pid, platform) else "主控面板已經開著，但沒辦法把它叫到最前面。到 Dock 點一下 Python 的圖示")
         return
     try:
         launch(home, sys.executable, popen)  # 在面板外：互通的 run.py 已經確認過這個 Python 跑得動面板（D86）
     except OSError as exc:
-        app.log(f"打不開主控面板：{exc}")
+        app.log(f"打不開主控面板：{REASONS.get(exc.errno, '系統不讓打開')}。確認 iPLoT 資料夾還在，再雙擊一次")  # 原因是中文（體驗 7-08）
         return
     app.log("打開主控面板")
     if platform != "darwin":

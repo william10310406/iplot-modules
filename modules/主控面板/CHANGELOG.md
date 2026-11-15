@@ -2,6 +2,13 @@
 
 「主控面板」這個模組的版本紀錄，格式跟 iPLoT 的 CHANGELOG.md 一樣（[Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)）。`tools/publish.py` 取最上面那一節的版本號當工作坊裡的版本，取那一節的第一段當清單頁上的「這一版」。
 
+## [Unreleased]
+
+## [0.1.2] - 2026-11-15
+
+### 修正
+- 打不開主控面板時，原因是中文並說怎麼辦；叫不到最前面時說到 Dock 點一下 Python 的圖示。
+
 ## [0.1.1] - 2026-11-06
 
 加上 LICENSE（MIT）。

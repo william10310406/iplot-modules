@@ -93,10 +93,10 @@
     "name": "主控面板",
     "owner_id": 71483597,
     "owner": "william10310406",
-    "version": "0.1.1",
-    "notes": "加上 LICENSE（MIT）。",
-    "issue": 19,
-    "updated": "2026-11-06",
+    "version": "0.1.2",
+    "notes": "### 修正\n- 打不開主控面板時，原因是中文並說怎麼辦；叫不到最前面時說到 Dock 點一下 Python 的圖示。",
+    "issue": 27,
+    "updated": "2026-11-15",
     "license": "MIT",
     "copyright": [
       [
@@ -105,7 +105,7 @@
         71483597
       ]
     ],
-    "license_issue": 19
+    "license_issue": 27
   },
   "行事曆": {
     "name": "行事曆",
