@@ -15,10 +15,10 @@
     "name": "開工",
     "owner_id": 71483597,
     "owner": "william10310406",
-    "version": "0.5.1",
-    "notes": "加上「互通」的那一小段：可以直接 python3 iplot.py。",
-    "issue": 7,
-    "updated": "2026-10-23",
+    "version": "0.5.2",
+    "notes": "### 修正\n- docs 或設計文件被刪掉時，最後一行說哪個找不到，不再說「都開了」。",
+    "issue": 30,
+    "updated": "2026-11-15",
     "license": "MIT",
     "copyright": [
       [
@@ -26,7 +26,8 @@
         "Wei-Heng Chien (簡偉恆)",
         71483597
       ]
-    ]
+    ],
+    "license_issue": 30
   },
   "打開核心原始碼": {
     "name": "打開核心原始碼",

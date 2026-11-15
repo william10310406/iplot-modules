@@ -25,8 +25,11 @@ ICON = "🧭"
 
 
 def run(app):
+    docs = app.home / "docs"
+    design = docs / "02_重構設計.md"
     app.open(app.home)
-    app.open(app.home / "docs")
-    app.edit(app.home / "docs" / "02_重構設計.md")
+    app.open(docs)
+    app.edit(design)
     app.terminal(app.home)
-    app.log("開工：iPLoT 資料夾、docs、設計文件、終端機都開了")
+    gone = [p.name for p in (docs, design) if not p.exists()]  # 沒有的那幾個，作業系統模組已經各說了一句；這一行不能說「都開了」
+    app.log("開工：iPLoT 資料夾、docs、設計文件、終端機都開了" if not gone else f"開工：{'、'.join(gone)} 找不到，其餘都開了")
