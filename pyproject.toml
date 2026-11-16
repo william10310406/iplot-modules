@@ -1,7 +1,9 @@
 [tool.ruff]
 target-version = "py312"
 line-length = 120
-extend-exclude = ["tests/vendor"]
+# 課程作業的範例與範本是照 docs/09 的作業規範寫的：第一行 REQUIRES、第二行 `import coursework; coursework.ensure(...)` 是規範 R1、R2
+# 規定的樣子（先裝好缺的套件才往下 import），所以 E402、E702、I001 是刻意的，不改內容、整批排除
+extend-exclude = ["tests/vendor", "modules/課程作業/範例課程", "modules/課程作業/作業類型/算完畫圖/範本.py"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "BLE", "S102", "S307", "S602", "S605"]
