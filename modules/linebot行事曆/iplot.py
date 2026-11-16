@@ -262,8 +262,9 @@ class Api:
         days = diary.month_summary(root, ym)
         self._viewing = None
         self._touch_line("month", ym)
+        data = self._line.merged()
         return {"ym": ym, "today": self._today().isoformat(), "days": days, "folder": str(root),
-                "line": line_view.month(self._line.merged(), ym, days)}
+                "line": line_view.month(data, ym, days), "line_undated": line_view.undated(data)}
 
     @_guarded
     def year(self, y):

@@ -131,16 +131,28 @@ def test_a_payload_with_the_wrong_version_or_types_is_refused_with_a_reason_and_
     assert sync.merged().to_payload() == good
 
 
-def test_on_success_runs_after_an_open_that_got_fresh_data_and_only_then(tmp_path):
+def test_on_success_runs_after_an_open_or_a_sync_that_got_fresh_data_and_only_then(tmp_path):
     calls = []
     sync, fetch, _, _ = make(tmp_path, on_success=lambda: calls.append("copy"))
     sync.refresh()
-    assert calls == []                                  # 「立刻更新」不觸發
+    assert calls == ["copy"]                            # 「同步」按鈕跟打開一樣：抓到之後做（0.3.0）
     sync.on_open()
-    assert calls == ["copy"]
-    fetch.script = [line_net.LineError("offline", "x")]
+    assert calls == ["copy", "copy"]
+    fetch.script = [line_net.LineError("offline", "x"), line_net.LineError("offline", "x"), line_net.LineError("not_found", "x")]
     sync.on_open()
-    assert calls == ["copy"]                            # 這次打開沒抓到：不做
+    assert calls == ["copy", "copy"]                    # 打開沒抓到：不做
+    sync.refresh()
+    assert calls == ["copy", "copy"]                    # 按「同步」沒抓到：不做
+    sync.refresh()
+    assert calls == ["copy", "copy"]                    # 網址失效（404）：不做
+
+
+def test_on_success_does_not_run_after_paging_fetches(tmp_path):
+    calls = []
+    sync, _, _, _ = make(tmp_path, on_success=lambda: calls.append("copy"))
+    sync.need("month", "2027-03")
+    sync.need("year", "2027")
+    assert calls == []                                  # 翻頁補抓不做自動複製（只有打開與「同步」）
 
 
 def test_cache_that_cannot_be_saved_does_not_crash_and_says_so(tmp_path, monkeypatch):
@@ -480,8 +492,8 @@ def test_a_crashing_on_success_does_not_wedge_the_worker(tmp_path):
         if thread.name == "line-sync":
             thread.join(5)
     assert sync.state()["last"]["ok"] is True
-    sync.refresh()
-    assert sync.wait_idle(5)
+    sync.need("month", "2027-03")                                 # 之後的工作照樣會做（回呼不會再被叫：翻頁補抓沒有自動複製）
+    assert sync.wait_idle(5) and sync.state()["busy"] is False
 
 
 # ── 預設範圍還在抓的時候，翻頁不要重複去抓同一段 ──

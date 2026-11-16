@@ -95,6 +95,8 @@ table.mini td.litems::after { content: ""; position: absolute; bottom: 1px; left
 .linebox .lrow { padding: 1px 0; white-space: pre-wrap; word-break: break-word; }
 .linebox .lrow .when { color: var(--muted); margin-right: 5px; }
 .linebox .lrow.done .t { text-decoration: line-through; color: var(--muted); }
+.linebox.undated { margin: 8px 10px 4px; }
+.linebox.undated button { margin-top: 3px; font-size: 11px; padding: 1px 8px; }
 .linebox .detail { margin-left: 16px; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
 #lineStat { font-size: 12px; }
 #lineStat.bad { color: var(--accent); border-color: var(--accent); }
@@ -108,7 +110,7 @@ table.mini td.litems::after { content: ""; position: absolute; bottom: 1px; left
   <button id="vYear">年</button><button id="vMonth">月</button><button id="vDay">日</button>
   <button id="prev" title="上一個">‹</button><span id="title"></span><button id="next" title="下一個">›</button>
   <button id="today">今天</button><span class="spacer"></span>
-  <button id="lineStat" title="LINE">LINE</button><button id="web">看網頁</button><button id="publish">發佈</button><button id="gear" title="設定">⚙</button>
+  <button id="lineStat" title="LINE">LINE</button><button id="lineSync" hidden title="同步 LINE：抓最新的資料；⚙ 的自動複製開著的話，也把還沒複製的日子接進我的日記">同步</button><button id="web">看網頁</button><button id="publish">發佈</button><button id="gear" title="設定">⚙</button>
 </div>
 <div id="view"></div>
 <div id="status"></div>
@@ -124,7 +126,7 @@ table.mini td.litems::after { content: ""; position: absolute; bottom: 1px; left
   <h4><span class="ltag">LINE</span> 接上 LINE bot</h4>
   <p id="lineMasked" class="muted"></p>
   <input id="lineUrl" type="password" autocomplete="off" spellcheck="false" placeholder="貼上 LINE 網址（https://…/j/….json）">
-  <div class="row"><button id="lineSave">貼上／更換</button><button id="lineClear">清除</button><button id="lineRefresh">立刻更新</button></div>
+  <div class="row"><button id="lineSave">貼上／更換</button><button id="lineClear">清除</button><button id="lineRefresh">立刻同步</button></div>
   <p id="lineInfo" class="muted"></p>
   <label><input type="checkbox" id="lineAuto"> 自動複製：每次打開，把昨天以前還沒複製的 LINE 內容接進我的日記（略過私人項目與公開的日子）</label>
   <p id="lineAutoMsg" class="muted"></p>
@@ -164,7 +166,7 @@ const call = (name, ...args) => {
 const say = (text, bad) => { $("status").textContent = text || ""; $("status").className = bad ? "bad" : ""; };
 
 let view = "month", cur = new Date(), todayText = ymd(new Date()), day = null, dirty = false, timer = null;
-let lineState = null, lineVersion = null, diaryVersion = null, pollTimer = null, lastMessage = "", lastAuto = "", lineParts = {}, pendingCopy = null, updatingMsg = false;
+let lineState = null, lineVersion = null, diaryVersion = null, pollTimer = null, lastMessage = "", lastAuto = "", lineParts = {}, pendingCopy = null, updatingMsg = false, undatedOpen = false;
 
 function setView(v) {
   view = v;
@@ -210,7 +212,8 @@ async function showMonth() {
     if ((first + n) % 7 === 0) { table.append(row); row = el("tr"); }
   }
   if (row.children.length) table.append(row);
-  $("view").replaceChildren(table);
+  const strip = undatedStrip(r.line_undated);
+  $("view").replaceChildren(table, ...(strip ? [strip] : []));
 }
 
 async function showYear() {
@@ -389,6 +392,22 @@ function addLineRows(td, L, mineFirst) {
   else if (mineFirst && L.count) td.append(el("span", "lmore", "LINE ×" + L.count));
 }
 
+// 月檢視底下：沒有截止日的待辦（唯讀；不屬於任何一天）。前 5 件，其餘按「還有 N 件」展開
+const UNDATED_SHOWN = 5;
+function undatedStrip(list) {
+  if (!list || !list.length) return null;
+  const box = el("div", "linebox undated"), head = el("div", "lhead");
+  head.append(el("span", "ltag", "LINE"), " 📌 沒有日期的待辦（" + list.length + "）");
+  box.append(head);
+  for (const t of undatedOpen ? list : list.slice(0, UNDATED_SHOWN)) box.append(taskRow(t));
+  if (list.length > UNDATED_SHOWN) {
+    const more = el("button", "", undatedOpen ? "收起" : "還有 " + (list.length - UNDATED_SHOWN) + " 件");
+    more.addEventListener("click", () => { undatedOpen = !undatedOpen; box.replaceWith(undatedStrip(list)); });
+    box.append(more);
+  }
+  return box;
+}
+
 function lineBoxFor(key) {
   const box = el("div", "linebox");
   box.hidden = true;
@@ -517,6 +536,10 @@ function renderChip() {
   else if (s.message) { text = "LINE ⚠"; cls = "bad"; tip = s.message; }
   else if (s.last_ok_at) { text = "LINE ✓ " + fmtTime(s.last_ok_at); cls = "ok"; tip = "LINE 上次更新：" + fmtTime(s.last_ok_at); }
   chip.textContent = text; chip.className = cls; chip.title = tip;
+  const sync = $("lineSync");
+  sync.hidden = !s.configured;
+  sync.disabled = !s.configured || s.busy || s.retry_in > 0;
+  sync.textContent = s.busy ? "同步中…" : "同步";
 }
 
 function fillSettings() {
@@ -557,8 +580,11 @@ async function pollLine() {
   if (s.configured && s.message && s.message !== lastMessage) say(s.message, true);
   lastMessage = s.message;
   if (updatingMsg && !s.busy) {   // 我們自己說了「更新中…」：做完要換成結果（失敗的話上面已經說了原因）
+    const pressed = updatingMsg === "sync";
     updatingMsg = false;
-    if (!s.message && s.last_ok_at) say("LINE 已更新：" + fmtTime(s.last_ok_at));
+    if (!s.message && s.last_ok_at) {
+      say("LINE 已同步：" + fmtTime(s.last_ok_at) + (pressed && !s.auto_copy ? "。自動複製沒開，要複製請在日檢視按「複製進我的日記」" : ""));
+    }
   }
   if (s.auto_message && s.auto_message !== lastAuto) say(s.auto_message, s.auto_message.includes("存不進"));
   lastAuto = s.auto_message;
@@ -601,8 +627,8 @@ async function refreshLine() {
   const r = await call("line_refresh");
   if (r.error) return;
   applyState(r);
-  say("更新 LINE 中…");
-  updatingMsg = true;
+  say("同步 LINE 中…");
+  updatingMsg = "sync";
   pollLine();
 }
 
@@ -719,6 +745,7 @@ function wire() {
   $("lineSave").addEventListener("click", saveLineUrl);
   $("lineClear").addEventListener("click", clearLine);
   $("lineRefresh").addEventListener("click", refreshLine);
+  $("lineSync").addEventListener("click", refreshLine);
   $("lineAuto").addEventListener("change", toggleAuto);
   $("copyNo").addEventListener("click", () => { pendingCopy = null; $("copy").hidden = true; });
   $("copyYes").addEventListener("click", confirmCopy);

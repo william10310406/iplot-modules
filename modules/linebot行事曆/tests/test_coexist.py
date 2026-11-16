@@ -243,4 +243,4 @@ def test_module_bar_lists_the_old_calendar_and_skips_ourselves_the_system_module
     api = iplot.Api(fake_app, tmp_path / "設定.json", default_root=tmp_path / "d", platform="linux", environ={})
     bar = api.modules()
     assert [m["name"] for m in bar["modules"]] == ["行事曆", "開工"] and bar["panel"] is True
-    assert iplot.HERE.name == "行事曆 2"
+    assert iplot.HERE.name != "行事曆"   # 資料夾可以改名（現在叫 linebot行事曆）；只要不是舊的那個名字，模組列才會把舊的列出來

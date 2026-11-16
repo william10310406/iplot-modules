@@ -2,7 +2,8 @@
 
 - **抓網址一律在背景執行緒做**（L08）：refresh()／need()／on_open() 只是排工作、立刻回傳，不會卡住頁面，
   也不拿 iplot.py 的 Api._lock。工作一次做一件、依序做；同一段已經在排或在抓就不重複送。
-- 打開行事曆時抓一次預設範圍（不帶 from／to：前 35 天到後 70 天）；「立刻更新」再抓一次；翻到沒有快取的月、年才用
+- 打開行事曆時抓一次預設範圍（不帶 from／to：前 35 天到後 70 天）；「同步」按鈕再抓一次，抓到之後都會做 on_success
+  （自動複製；工作第三個欄位 opening 就是「抓到之後要不要做 on_success」，翻頁補抓是 False）；翻到沒有快取的月、年才用
   from／to 補抓，只抓在今天（台北日期）前後 400 天內、而且沒有快取（24 小時內抓的才算有）的部分；年最多 4 段、每段 ≤ 100 天。
 - 失敗（任何一種）：快取不動、只記下原因，佇列裡剩下的丟掉；429 照 Retry-After 等（期間一個請求都不送，重開也一樣）。
 - state() 給頁面看，**不含完整網址**：只有遮過的。
@@ -152,8 +153,8 @@ class Sync:
         return self._enqueue([(None, None, True)])
 
     def refresh(self) -> dict:
-        """「立刻更新」：再抓一次預設範圍。"""
-        return self._enqueue([(None, None, False)])
+        """「同步」按鈕（0.3.0）：跟打開一樣——再抓一次預設範圍，抓到最新資料之後做 on_success（自動複製；開關沒開它自己什麼都不做）。"""
+        return self._enqueue([(None, None, True)])
 
     def need(self, kind, key) -> dict:
         """翻到月（key=YYYY-MM）或年（key=YYYY）：沒有快取的部分補抓。格式不對就什麼都不做。"""

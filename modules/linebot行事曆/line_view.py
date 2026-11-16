@@ -112,6 +112,13 @@ def month(data: line_data.Parsed, ym: str, mine_days: dict) -> dict[str, dict]:
     return result
 
 
+def undated(data: line_data.Parsed) -> list[dict]:
+    """沒有截止日、還沒完成的待辦（月檢視底下那一條，L16）。順序照 bot 給的。
+    它不屬於任何一天：不進月格、年、日，也不複製進日記。bot 只給沒完成的；萬一有完成的也不列。"""
+    return [{"id": item["id"], "title": item["title"], "private": item["private"], "group": item["group"], "note": item["note"]}
+            for item in data.tasks if line_data.task_day(item) is None and not item["done"]]
+
+
 def year(data: line_data.Parsed, y: str, mine_moods: dict) -> dict[str, dict]:
     """一年裡 LINE 要標記的日子：{"11": {"06": {"source": "line", "emoji": "🙂"}}}。
     source 是 "line"（LINE 的心情，虛線外框）或 "items"（只有事項，小圓點）。我那天選了表情的不列（頁面顯示我的）。
