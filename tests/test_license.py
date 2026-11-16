@@ -658,9 +658,10 @@ OLD_HASH = "aeed872b5d5403c775876f5459a2c7705e9ceb4e575fba6286c2d0e40d7b48a0"  #
 def test_migrated_seeds_have_three_field_copyright_license_files_and_hashes():
     licenses = json.loads((ROOT / "licenses.json").read_text(encoding="utf-8"))
     with_license = {k: e for k, e in SEEDS.items() if "license" in e}
-    assert len(with_license) == 10
+    assert len(with_license) >= 10  # 遷移時是 10 個；之後上傳的（課程作業、Lean、linebot行事曆…）也有 license
     for k, entry in with_license.items():
-        assert entry["copyright"] == [[2026, RA, RA_ID]], k
+        if entry.get("owner_id") == RA_ID:
+            assert entry["copyright"] == [[2026, RA, RA_ID]], k
         licensing.render(entry["copyright"])  # 合格
         assert licenses[licensing.digest(entry["copyright"])] == entry["copyright"]
         folder = ROOT / "modules" / entry["name"]
@@ -668,14 +669,13 @@ def test_migrated_seeds_have_three_field_copyright_license_files_and_hashes():
             raw = (folder / "LICENSE").read_bytes()
             assert raw == licensing.render(entry["copyright"]).encode("utf-8"), k
             assert hashlib_sha(raw) in licenses
-    assert len(list((ROOT / "modules").glob("*/LICENSE"))) == 6
 
 
 def test_the_old_hash_is_kept_so_a_fork_with_the_old_license_is_still_known():
     licenses = json.loads((ROOT / "licenses.json").read_text(encoding="utf-8"))
     assert licenses[OLD_HASH] == [[2026, RA, RA_ID]]
     assert licensing.digest(licenses[OLD_HASH]) == OLD_HASH  # 研究助理的顯示名沒變，LICENSE 的位元組一樣，所以新舊雜湊是同一個
-    assert list(licenses) == [OLD_HASH]
+    assert list(licenses)[0] == OLD_HASH  # 後來有人改了研究助理的模組再上傳（版權人多一個）時，會多出別的雜湊；舊的不能不見
 
 
 def test_every_entry_in_licenses_json_and_registry_json_is_valid():
