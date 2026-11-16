@@ -28,7 +28,7 @@ OUTSIDE = "「互通」要放在 iPLoT 的 modules/ 裡才能用：{path}。把�
 NO_POPUP = "彈出式視窗開不起來：{reason}。再打開一次；還是不行就從 iPLoT 的面板打開這個模組"
 CRASHED = "互通沒做成。細節記在 iPLoT 資料夾的 logs/iplot.log；再打開一次，還是不行就把那個檔交給幫你的人。"
 USAGE = "用法：python3 run.py <模組資料夾或名稱> [檔案…]"
-OURS = ("boot", "popup", "sync", "snippet", "shortcut")  # 這個資料夾自己的檔：用完就從 sys.modules 拿掉
+OURS = ("boot", "popup", "sync", "snippet", "shortcut", "nav")  # 這個資料夾自己的檔：用完就從 sys.modules 拿掉
 
 
 class NoTk:
@@ -118,7 +118,8 @@ def main(argv: list[str], *, home: Path | None = None, folder: Path | None = Non
 
 
 def _run(argv: list[str], home: Path, folder: Path, webview, cwd: Path) -> int:
-    import popup as popup_module  # noqa: I001  core 在 iPLoT 是第一方、在 iplot-modules 是第三方：兩邊的 isort 要的空行不一樣
+    import nav  # noqa: I001  core 在 iPLoT 是第一方、在 iplot-modules 是第三方：兩邊的 isort 要的空行不一樣
+    import popup as popup_module
     import sync
 
     from core.core import Core, load_config
@@ -133,6 +134,7 @@ def _run(argv: list[str], home: Path, folder: Path, webview, cwd: Path) -> int:
     popup = popup_module.Popup(home, webview, dock=dock)
     core = Core(home, config, popup)
     popup.attach(core)
+    nav.track(core)  # 核心 0.5、0.6 沒有 Core.running：導覽列要知道是哪個模組開的頁面（D154）
     core.rescan()  # 在面板外一律是最上層
     info, problem = resolve(core, argv[0], cwd)
     popup.title = info.title if info is not None else "互通"

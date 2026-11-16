@@ -4,7 +4,7 @@
 模組在工作執行緒上跑；頁面呼叫 Python 的方法只排工作、立刻回傳；對話框用 threading.Event 等頁面回答。
 不 import ui/（ui/ 是核心的一部分，D80）；錯誤講成一句話用 core.errors.describe。"""
 
-import contextlib
+import contextlib  # noqa: I001  core 在 iPLoT 是第一方、在 iplot-modules 是第三方：兩邊的 isort 要的空行不一樣
 import itertools
 import json
 import os
@@ -13,6 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import nav
 from core.errors import describe
 from core.types import ErrorInfo, Scope
 
@@ -79,6 +80,7 @@ class Popup:
         self._running = threading.Lock()  # 模組在跑的期間拿著；「打開檔案」等它跑完才做（runner 一次只跑一個）
         self._panel = threading.Lock()  # 回去鈕一次只跑一個：連按兩下不會開兩次
         self._back: str | None = None  # 回去鈕跑的模組名稱；done 時由 run.py 給
+        self._pages: list = []  # 開著的頁面視窗：已經有一頁開著，新的一頁不畫導覽列（D154）
         self._paging = False  # app.page 的視窗開著：小視窗不因「跑太久」出來，關它也只是藏起來
         self._said = 0  # 小視窗說過幾次話（訊息、錯誤、執行中、問問題、跑完）；選檔案時用來判斷能不能藏回去
         self._ids = itertools.count(1)
@@ -283,15 +285,20 @@ class Popup:
 
     def page(self, title: str, html: str, api: object | None) -> None:
         """另開一個 640×520 的視窗顯示一頁 HTML（app.page），關掉才回來；不會因此把小視窗叫出來。
-        開之前回到一般的 App（在 Dock、在 ⌘-Tab 裡）：被別的視窗蓋住時要找得回來，模組在等它關。"""
+        開之前回到一般的 App（在 Dock、在 ⌘-Tab 裡）：被別的視窗蓋住時要找得回來，模組在等它關。
+        在模組執行中開的、而且沒有別的頁面開著，就多一排導覽列（nav.py，D154）。"""
         if self._dock:
             self._dock(True)
         self._paging = True
         try:
             window = self.webview.create_window(title, html=html, js_api=api, width=640, height=520)
+            if getattr(self.core, "running", None) and not self._pages:
+                nav.Nav(window, self.core, self.log)
+            self._pages.append(window)
             closed = threading.Event()
             window.events.closed += closed.set
             closed.wait()
+            self._pages.remove(window)
         finally:
             self._paging = False
 

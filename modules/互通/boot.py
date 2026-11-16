@@ -15,14 +15,14 @@ import sys
 from pathlib import Path
 
 REEXEC = "IPLOT_INTEROP_REEXEC"  # 換過一次 Python 的記號：換過還不行就說一句，不再換
-SUPPORTED = ("0.5.", "0.6.")  # 這一版支援的核心（str.startswith 收 tuple）；0.5 沒有 home_path，run.py 照舊（D117）
+MIN_CORE = (0, 5)  # 只擋下限：核心 ≥ 0.5 而且 api_version ≥ MIN_API 就放行，核心升次版本不必等互通先發（D151）；0.5 沒有 home_path，run.py 照舊（D117）
 MIN_API = 3
 RECORD = ".python"
 OLD = "互通需要 Python 3.10 以上，這個是 {version}。先在面板按一次「互通」，讓它記下面板用的 Python。"
 NO_LIB = ("這個 Python（{exe}）載不進 iPLoT 的介面套件：{reason}（lib/ 可能是給別的 Python 裝的）。"
           "先在面板按一次「互通」，讓它記下面板用的 Python。")
 STILL = "換成記下的 Python（{exe}）還是開不起來：{reason}。在面板按一次「互通」重新記下。"
-VERSION = "互通 {mine} 支援 iPLoT 0.5、0.6，這台是 {found}。iPLoT 比較舊就按「更新」，比較新就到工作坊看看互通有沒有新版。"
+VERSION = "互通 {mine} 需要 iPLoT 0.5 以上，這台是 {found}。iPLoT 太舊，按「更新」。"
 ALERT = ["osascript", "-e", "on run argv",
          "-e", "display alert (item 1 of argv) message (item 2 of argv) as critical", "-e", "end run"]
 
@@ -140,7 +140,8 @@ def ensure_python(home: Path, folder: Path, run_file: str, argv: list[str], *, v
 
 
 def check_version(core_version: str, api_version: int, mine: str) -> str | None:
-    """核心是 0.5.x 或 0.6.x、而且 api_version ≥ 3 才回 None；否則回那一句。"""
-    if core_version.startswith(SUPPORTED) and api_version >= MIN_API:
+    """核心 ≥ MIN_CORE 而且 api_version ≥ MIN_API 才回 None；讀不出版本、太舊都回那一句。"""
+    found = re.match(r"(\d+)\.(\d+)", core_version)
+    if found and (int(found[1]), int(found[2])) >= MIN_CORE and api_version >= MIN_API:
         return None
     return VERSION.format(mine=mine, found=core_version)

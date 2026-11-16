@@ -43,8 +43,8 @@ def why_not(info: ModuleInfo, roots: list[Root]) -> str | None:
     """這個模組不加那一小段的原因；可以加就回 None（還要再看在不在 modules/ 裡、讀不讀得懂，見 iplot.py 的 candidates）。"""
     if info.file.is_symlink():
         return "是符號連結"
-    if (info.folder / ".origin").exists():
-        return "工作坊裝來的"  # 加了會變「已修改」（D77）
+    if _from_workshop(info):
+        return "工作坊裝來的"  # 自己或上面任何一層是工作坊裝來的：加了會讓那一個變「已修改」（D77）
     if info.level == "here" and info.name in BUNDLED:
         return "隨附模組"
     if any(r.level == "extra" and r.path == info.root for r in roots):
@@ -52,6 +52,16 @@ def why_not(info: ModuleInfo, roots: list[Root]) -> str | None:
     if _uses_tk(info.file):
         return "用了 tkinter 或 turtle"  # 加了之後直接執行會交給 run.py，而 run.py 開不了 tkinter 的視窗
     return None
+
+
+def _from_workshop(info: ModuleInfo) -> bool:
+    """模組資料夾往上到根目錄（不含根目錄本身），任何一層有 .origin 就是工作坊裝來的。"""
+    folder = info.folder
+    while folder != info.root and folder != folder.parent:
+        if (folder / ".origin").exists():
+            return True
+        folder = folder.parent
+    return False
 
 
 def _uses_tk(file: Path) -> bool:
