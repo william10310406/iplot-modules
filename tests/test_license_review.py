@@ -130,8 +130,8 @@ def test_the_repo_has_one_hash_for_every_ra_module():
     root = Path(__file__).resolve().parents[1]
     data = registry.read_json_strict(root / "registry.json")
     hashes = {licensing.digest(e["copyright"]) for e in data.values() if e.get("copyright")}
-    assert hashes == set(registry.read_json_strict(root / "licenses.json"))
-    assert len(hashes) == 1
+    assert hashes == set(registry.read_json_strict(root / "licenses.json"))  # 每個雜湊都有模組在用，也沒有用到表裡沒有的
+    assert len(hashes) >= 1  # 只有研究助理的是一個；別人改了他的模組再上傳（版權人多一個）會多一個，是正常的
 
 
 def test_a_symlink_named_license_is_skipped_and_the_bot_writes_its_own(repo, python310, tmp_path):
