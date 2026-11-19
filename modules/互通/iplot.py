@@ -171,8 +171,21 @@ def run(app):
     import boot
     import sync
 
-    boot.remember_python(HERE, sys.executable)
+    boot.remember_python(HERE, sys.executable)  # 先記：要記的是面板的 Python，下面另開的程序不一定是同一個
+    if not _separate(app):  # 狀態頁在另開的程序裡開，面板空出來
+        return
     python = boot.recorded_python(HERE) or sys.executable
     sync.sync(app.home, app.config, python, HERE)
     data = status(app.home, app.config, python, HERE)
     app.page("互通", render(data), Api(app, app.home, app.config, python, HERE))
+
+
+def _separate(app) -> bool:
+    """經旁邊的 separate.py 另開一個程序開狀態頁，面板不會被卡住；回 False 表示已經另開或叫到最前面了。
+    用檔案路徑載入，跟別的模組用它的方式一樣，sys.modules 裡不留一個叫 separate 的名字。"""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("iplot_interop_separate", HERE / "separate.py")
+    separate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(separate)
+    return separate.here(app)
