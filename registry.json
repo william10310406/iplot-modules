@@ -9,7 +9,16 @@
   },
   "工作坊": {
     "name": "工作坊",
-    "reserved": true
+    "owner_id": 71483597,
+    "owner": "william10310406",
+    "license": "MIT",
+    "copyright": [
+      [
+        2026,
+        "Wei-Heng Chien (簡偉恆)",
+        71483597
+      ]
+    ]
   },
   "開工": {
     "name": "開工",
