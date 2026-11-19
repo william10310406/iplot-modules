@@ -102,6 +102,7 @@ table.mini td.litems::after { content: ""; position: absolute; bottom: 1px; left
 #lineStat.bad { color: var(--accent); border-color: var(--accent); }
 #lineStat.ok { border-color: var(--lg); }
 .copyrow { margin-top: 10px; }
+.backmonth { margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -312,7 +313,11 @@ async function showDay() {
   dirty = false;
   $("title").textContent = (cur.getMonth() + 1) + " 月 " + cur.getDate() + " 日（" + WEEK[cur.getDay()] + "）";
   const box = el("div", "day");
-  box.append(el("h2", "", cur.getFullYear() + " 年 " + (cur.getMonth() + 1) + " 月 " + cur.getDate() + " 日"));
+  const back = el("button", "backmonth", "‹ 回到 " + (cur.getMonth() + 1) + " 月");  // 日檢視裡明明白白的返回鍵：回到這一天所在的月曆
+  back.type = "button";
+  back.title = "回到這個月的月曆";
+  back.addEventListener("click", () => go("month"));
+  box.append(back, el("h2", "", cur.getFullYear() + " 年 " + (cur.getMonth() + 1) + " 月 " + cur.getDate() + " 日"));
   const moods = el("div", "moods");
   if (day.unreadable["心情"]) {
     box.append(el("p", "unreadable", "讀不到這個檔（不是 UTF-8），沒有覆寫它：" + day.unreadable["心情"]));
