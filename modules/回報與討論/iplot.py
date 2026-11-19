@@ -22,6 +22,7 @@ if __name__ == "__main__" and "core.runner" not in sys.modules:
               file=sys.stderr)
 # ── 互通 ──
 
+import importlib.util
 import json
 import threading
 import time
@@ -217,6 +218,8 @@ def run(app):
     最上層的模組（下一層模組的名字可能是學生的名字，不列）；每一份都在這裡先算好，頁面那一頭只查表、不碰 app。"""
     if report.panel_kind() == "tkinter":
         return _menu_by_ask(app)
+    if not _separate(app):  # 在另開的程序裡開這一頁，面板空出來；「回報這個問題」（on_error）拿的是面板上的錯誤，留在面板裡
+        return
     env = report.short_env(app)
     names = list(dict.fromkeys(m.name for m in app.modules if m.level != "child"))  # 不同的根底下同名的只列一次
     saved = []
@@ -380,3 +383,15 @@ def _copy_tk(text: str) -> bool:
     except Exception:  # noqa: BLE001  複製不成不能讓整個回報停下來
         return False
     return True
+
+
+def _separate(app) -> bool:
+    """有「互通」的 separate.py（互通 0.4.0 起）就經它另開一個程序開這一頁，面板不會被卡住；回 False 表示已經另開
+    或叫到最前面了，這裡不用開。沒有就照舊在這裡開。用檔案路徑載入：這個模組的 sys.path[0] 是自己的資料夾。"""
+    path = Path(app.home) / "modules" / "互通" / "separate.py"
+    if not path.is_file():
+        return True
+    spec = importlib.util.spec_from_file_location("iplot_interop_separate", path)
+    separate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(separate)
+    return separate.here(app)

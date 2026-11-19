@@ -15,7 +15,7 @@ from pathlib import Path
 import forum
 import redact
 
-REPORTER = "0.2.1"  # 內文最後那一行的 HTML 註解帶的版本：跟 CHANGELOG.md 最上面那一節一樣（測試核）
+REPORTER = "0.2.2"  # 內文最後那一行的 HTML 註解帶的版本：跟 CHANGELOG.md 最上面那一節一樣（測試核）
 WHAT_HEAD = "### 發生了什麼"
 WHAT_ERROR = "（請寫一兩句：按了什麼、預期是什麼）"
 WHAT_BLANK = "（請寫：按了什麼、看到什麼、預期是什麼）"
