@@ -8,7 +8,8 @@ from iplot_rules import read_listing
 
 ROOT = Path(__file__).resolve().parents[1]
 RA_ID = 71483597  # Task 0 探針：GET /users/william10310406
-SEEDS = ("開工", "打開核心原始碼", "開Terminal", "重新啟動", "互通", "主控面板", "行事曆", "科學計算", "上傳", "課程作業")
+SEEDS = ("開工", "打開核心原始碼", "開Terminal", "重新啟動", "互通", "主控面板", "行事曆", "科學計算", "上傳", "課程作業",
+         "工作坊")  # 工作坊：iPLoT 的工作坊 1.0.0 起自己更新自己，只認研究助理傳的那一份（2026-11-19，iPLoT D158）
 NOTICE = "這裡的模組是大家上傳的，沒有人審查；都以 MIT 授權公開，可以改、可以再分享（保留 LICENSE）。裝進來的模組第一次執行前 iPLoT 會先問；按確定之前，在面板上右鍵「打開程式碼」看一眼。"
 
 
@@ -23,9 +24,9 @@ def test_seed_registry_reads_strictly_and_keys_are_nfc_casefold():
         assert k == registry.key(entry["name"])
 
 
-def test_reserved_three_have_only_name_and_reserved():
+def test_reserved_two_have_only_name_and_reserved():
     data = seed()
-    for name in ("作業系統", "更新", "工作坊"):
+    for name in ("作業系統", "更新"):
         assert data[registry.key(name)] == {"name": name, "reserved": True}
 
 
@@ -71,7 +72,7 @@ def test_seed_registry_builds_an_empty_listing(tmp_path):
 
 
 @pytest.mark.parametrize("name, key", [("重新啟動", "taken"), ("上傳", "taken"), ("開Ｔｅｒｍｉｎａｌ", "similar"),
-                                       ("工作坊", "reserved"), ("開 工", "similar")])
+                                       ("工作坊", "taken"), ("開 工", "similar")])
 def test_seed_names_cannot_be_taken_or_imitated(name, key):
     data = seed()
     refusal = registry.check_name(name, 222, data) or registry.owner_refusal(name, 222, data)
