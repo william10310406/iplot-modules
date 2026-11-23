@@ -238,3 +238,18 @@ def test_never_reads_a_whole_entry_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(zipfile.ZipFile, "extractall", boom)
     result = run(tmp_path)
     assert not isinstance(result, Refusal), result
+
+
+@pytest.mark.parametrize("path", ["行事曆/.pid", "行事曆/設定.json", "行事曆/line_cache.json", "行事曆/.backup/a.py",
+                                  "行事曆/資料/.lock"])
+def test_state_files_from_the_uploaders_computer_are_refused(tmp_path, path):
+    """iPLoT 0.8 的規則第 9 條（D160）：每台電腦自己的檔不准跟著包發出去（linebot行事曆 0.1.0 就帶了 .pid、設定.json、快取）。"""
+    z = make_zip(tmp_path / "m.zip", {"行事曆/iplot.py": "", path: "x"})
+    got = zipcheck.inspect(z, tmp_path / "out")
+    assert isinstance(got, Refusal) and got.key == "state_file" and code(path) in got.text
+
+
+def test_gitignore_and_the_skipped_dotfiles_are_still_fine(tmp_path):
+    z = make_zip(tmp_path / "m.zip", {"行事曆/iplot.py": "", "行事曆/.gitignore": "x", "行事曆/.origin": "{}",
+                                      "行事曆/__pycache__/a.pyc": "x", "行事曆/設定範例.json": "{}"})
+    assert not isinstance(zipcheck.inspect(z, tmp_path / "out"), Refusal)

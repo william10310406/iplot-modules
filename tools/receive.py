@@ -21,6 +21,7 @@ from typing import Literal
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import check_deps  # noqa: E402
 import gh  # noqa: E402
 import licensing  # noqa: E402
 import registry  # noqa: E402
@@ -238,6 +239,21 @@ class Accepted:
     remarks: tuple[str, ...]
 
 
+DEPS_REMARK = ("這個模組沒照 iPLoT 寫模組的規則（repo 裡的 AGENTS.md）：{problems}。照樣收了；"
+               "不改的話，iPLoT 換版本時它比較容易壞。給 AI 助手改的話，叫它先讀 AGENTS.md。")
+RULE_NAMES = {"R1": "用名字碰別的模組", "R2": "import 了核心的內部", "R3": "猜環境", "R4": "第三方套件沒有退路或用了套件內部",
+              "R5": "用到的沒寫在 NEEDS", "R11": "另開程序把錯誤輸出丟掉"}
+MAX_DEPS_SHOWN = 8
+
+
+def dependency_problems(folder: Path, registry_data: dict) -> list[str]:
+    """iPLoT 的依賴檢查（tools/check_deps.py，逐字抄自 iPLoT）找到、不在白名單上的違規，一條一句。"""
+    names = check_deps.module_names() | {entry["name"] for entry in registry_data.values()}
+    found = [f"{RULE_NAMES.get(rule, rule)}（{rule}，{file.split('/', 2)[-1]}：{what}）"
+             for rule, file, what in check_deps.new_in(folder, names)]
+    return found[:MAX_DEPS_SHOWN] + ([f"還有 {len(found) - MAX_DEPS_SHOWN} 條"] if len(found) > MAX_DEPS_SHOWN else [])
+
+
 def examine(issue: dict, form: gh.Form, zip_path: Path, zip_sha256: str, root: Path, registry_data: dict,
             received: dict, licenses: dict, now: datetime, python310: str, staging: Path) -> Accepted | Refusal:
     """設計第 5.2 節第 4–9 步，照順序；哪一步不過就回那一句。"""
@@ -256,6 +272,9 @@ def examine(issue: dict, form: gh.Form, zip_path: Path, zip_sha256: str, root: P
     checked = source.check_source(unpacked.folder, name, user_id, registry_data, python310)
     if isinstance(checked, Refusal):
         return checked
+    deps = dependency_problems(unpacked.folder, registry_data)
+    if deps and user_id == licensing.OWNER_RA_ID:  # 維護者的模組要守規則；別人的只警告（iPLoT D160、AGENTS.md）
+        return refuse("deps", problems="；".join(deps))
     entry = registry_data.get(k)
     licensed = licensing.apply(unpacked, user_id, login, now.year, (entry or {}).get("copyright", []), licenses,
                                registry_data, form.fork_of)
@@ -272,7 +291,8 @@ def examine(issue: dict, form: gh.Form, zip_path: Path, zip_sha256: str, root: P
     ok, reason = may_publish(upload)
     if not ok:
         return refuse("held", reason=reason)
-    return Accepted(upload, unpacked, checked.remarks + version.remarks)
+    deps_remark = (DEPS_REMARK.format(problems="；".join(deps)),) if deps else ()
+    return Accepted(upload, unpacked, checked.remarks + version.remarks + deps_remark)
 
 
 @dataclass(frozen=True)

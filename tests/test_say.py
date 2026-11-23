@@ -5,7 +5,7 @@ import say
 
 ROW_KEYS = {
     "not_user", "gone", "no_zip", "many_zips", "not_agreed", "not_licensed", "license_like", "license_unknown", "fork_unknown", "download", "too_big", "not_zip", "broken", "shape",
-    "bad_path", "names_not_utf8", "too_large", "too_many_files", "too_many_entries", "bad_name", "invisible",
+    "bad_path", "state_file", "deps", "names_not_utf8", "too_large", "too_many_files", "too_many_entries", "bad_name", "invisible",
     "similar", "reserved", "removed", "taken", "title_taken", "case", "too_many_uploads", "too_many_names", "full",
     "syntax", "syntax_310", "not_utf8", "too_complex", "surrogate", "changelog", "not_newer", "blocked", "retry",
     "stuck", "iplot_big", "bad_version", "not_writable", "held",
