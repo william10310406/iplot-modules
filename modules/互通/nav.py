@@ -56,17 +56,70 @@ def parent_of(info, roots):
     return scan.module_info(up, info.root, next((r.level for r in roots if top and r.path == info.root), "child"))
 
 
+def from_provider(core, owner, panel):
+    """核心 0.8 起：問提供 page.top 的模組（隨附的「導覽列」，D159），面板裡開的頁面用的也是它，所以兩邊一樣（多了同一層，
+    Discussion #9）。它的「主控面板」那一格目標是 None（關掉這一頁），在這裡換成「主控面板」模組；沒有那個模組就不列。
+    沒有提供者、或回的東西不對，回 None。"""
+    if not hasattr(core, "call"):
+        return None
+    got = core.call("page.top", owner)
+    if not (isinstance(got, dict) and isinstance(got.get("cells"), list) and isinstance(got.get("targets"), list)
+            and len(got["cells"]) == len(got["targets"])):
+        return None
+    found = []
+    for cell, target in zip(got["cells"], got["targets"], strict=True):
+        target = panel if target is None else target
+        if target is not None and isinstance(cell, dict):
+            found.append((cell.get("k", ""), target, cell.get("t", ""), cell.get("i", ""), cell.get("d", "")))
+    return found
+
+
+UP_FAILED = "它一開就結束了（原因記在 iPLoT 資料夾的 logs/separate.log）"
+
+
+def _errlog(home: Path):
+    """另開的程序的 stderr 要接到哪裡：logs/separate.log（附加），開不了就丟掉。"""
+    try:
+        (home / "logs").mkdir(exist_ok=True)
+        return open(home / "logs" / "separate.log", "ab")  # noqa: SIM115  交給 Popen 之後就關
+    except OSError:
+        return subprocess.DEVNULL
+
+
+def _spawn(popen, argv, home: Path, wait=None, **kw) -> bool:
+    """另開一個程序，等 wait 秒（環境變數 IPLOT_START_WAIT，預設 1）：這段時間裡出錯結束了（匯入就失敗、Python 起不來）
+    回 False，丟出去就當成功的做法不再用（D160 第 3 條）。stderr 接到 logs/separate.log，原因才留得下來。
+    Popen 本身失敗照樣丟 OSError。抄本：行事曆、主控面板、互通的 nav.py 各一份，要一樣（tools/copies.json）。"""
+    import time
+    err = _errlog(home)
+    try:
+        proc = popen(argv, start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=err, **kw)
+    finally:
+        if err is not subprocess.DEVNULL:
+            err.close()
+    deadline = time.monotonic() + (float(os.environ.get("IPLOT_START_WAIT", "1")) if wait is None else wait)
+    while time.monotonic() < deadline:
+        code = proc.poll()
+        if code is not None:
+            return code == 0
+        time.sleep(0.05)
+    return True
+
+
 class Nav:
     """一個頁面視窗的導覽列：格子與目標一一對應（主控面板、父層、子模組；沒有的就不列）。"""
 
     def __init__(self, window, core, log, popen=subprocess.Popen, environ=os.environ) -> None:
         owner = core.running[-1]  # 呼叫 app.page 的模組：最裡面那一個
-        up, kids = parent_of(owner, core.roots()), scan.find_children(owner.folder, owner.root)
         tops = [m for m in core.all_modules() if m.name == PANEL]  # 在面板外，all_modules 一律是最上層
-        found = [("panel", tops[0], PANEL, "", "")] if len(tops) == 1 and owner.name != PANEL else []
-        if up:
-            found.append(("parent", up, PARENT.format(title=up.title), "", up.description))
-        found += [("child", m, m.title, m.icon or "", m.description) for m in kids]
+        panel = tops[0] if len(tops) == 1 and owner.name != PANEL else None
+        found = from_provider(core, owner, panel)
+        if found is None:  # 核心 0.7 以前、或沒有「導覽列」模組：自己畫主控面板、父層、子模組
+            up, kids = parent_of(owner, core.roots()), scan.find_children(owner.folder, owner.root)
+            found = [("panel", panel, PANEL, "", "")] if panel else []
+            if up:
+                found.append(("parent", up, PARENT.format(title=up.title), "", up.description))
+            found += [("child", m, m.title, m.icon or "", m.description) for m in kids]
         self.targets = [target for _, target, *_ in found]
         self.cells = [{"k": k, "t": t, "i": i, "d": d} for k, _, t, i, d in found]
         self.choice = None
@@ -81,12 +134,15 @@ class Nav:
                 return log(NOT_OPENED.format(title=target.title, reason=NO_RUN))
             self.choice = i  # 先記下：連按兩下時，後面那一下進來就看到了
             try:
-                popen([sys.executable, str(RUN), str(target.folder)], env={k: v for k, v in environ.items() if k != ENV},
-                      start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                      stderr=subprocess.DEVNULL)
+                up = _spawn(popen, [sys.executable, str(RUN), str(target.folder)], RUN.parents[2],
+                            env={k: v for k, v in environ.items() if k != ENV})
             except OSError as exc:
+                up, why = False, plain(exc)
+            else:
+                why = UP_FAILED
+            if not up:
                 self.choice = None
-                return log(NOT_OPENED.format(title=target.title, reason=plain(exc)))
+                return log(NOT_OPENED.format(title=target.title, reason=why))
             window.destroy()  # 新的程序開起來了才關這一頁
 
         window.expose(_iplot_nav)

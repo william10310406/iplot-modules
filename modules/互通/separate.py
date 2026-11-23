@@ -10,6 +10,9 @@
 
 here(app) 回 True：就在這個程序裡開頁面——已經是另開的程序（捷徑、run.py）、tkinter 面板、沒有 run.py、另開失敗。
 回 False：已經另開了，或同一個模組早就開著、叫到最前面了；模組直接結束。
+另開之後要等到另開的程序把自己的 pid 寫進 .pid（它起來了）才算成功；等不到（WAIT 秒，環境變數 IPLOT_SEPARATE_WAIT
+可以改）、或它先結束了，就把它停掉、說一句，改在這個程序裡開（D160 第 3 條：另開的程序失敗了要有人知道）。
+另開的程序的 stderr 接到 logs/separate.log，匯入階段就失敗的原因才留得下來。
 同一個模組只開一個：另開的程序把自己的 pid 寫進模組資料夾的 .pid，結束時拿掉。
 
 別的模組的 sys.path[0] 是它自己的資料夾，所以要用檔案路徑載入這個檔（importlib.util.spec_from_file_location），
@@ -18,10 +21,12 @@ here(app) 回 True：就在這個程序裡開頁面——已經是另開的程�
 from __future__ import annotations
 
 import atexit
+import contextlib
 import errno
 import os
 import subprocess
 import sys
+import time
 import unicodedata
 from pathlib import Path
 
@@ -30,6 +35,8 @@ RUN_PY = ("modules", "互通", "run.py")
 OPENED = "在另一個視窗打開「{title}」"
 ALREADY = "「{title}」已經開著"
 ALREADY_BEHIND = "「{title}」已經開著（在 Dock 上找 Python 的圖示）"
+NOT_UP = "另開的視窗沒有開起來（原因記在 logs/separate.log），改在這裡打開「{title}」；開著的期間，面板上按別的模組會等它關掉才跑"
+WAIT = float(os.environ.get("IPLOT_SEPARATE_WAIT", "10"))
 FAILED = "沒辦法另開視窗（{why}），改在這裡打開「{title}」；開著的期間，面板上按別的模組會等它關掉才跑"
 REASONS = {errno.ENOENT: "找不到檔案或資料夾", errno.EACCES: "沒有權限", errno.EPERM: "沒有權限",
            errno.ENOMEM: "記憶體不夠", errno.EAGAIN: "系統現在開不了新的程式"}
@@ -108,9 +115,39 @@ def _claim(folder: Path, at_exit) -> None:
     at_exit(cleanup)
 
 
+def _errlog(home: Path):
+    """另開的程序的 stderr 要接到哪裡：logs/separate.log（附加），開不了就丟掉。"""
+    try:
+        (home / "logs").mkdir(exist_ok=True)
+        return open(home / "logs" / "separate.log", "ab")  # noqa: SIM115  交給 Popen 之後就關
+    except OSError:
+        return subprocess.DEVNULL
+
+
+def _pid_text(folder: Path) -> str:
+    try:
+        return (folder / PID).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def came_up(folder: Path, proc, before: str = "", ps=_ps, me: int | None = None, wait: float = WAIT,
+            sleep=time.sleep) -> bool:
+    """另開的程序在 wait 秒內起來了沒：.pid 換成新的內容（它一開始就把自己的 pid 寫進去；Windows 沒有 ps，
+    venv 的 python.exe 又會再開一個程序，pid 對不上，所以只看「換了」），或 ps 看得到它。它先結束了就是沒有。"""
+    deadline = time.monotonic() + wait
+    while True:
+        now = _pid_text(folder)
+        if (now and now != before) or running_pid(folder, ps, me) is not None:
+            return True
+        if proc.poll() is not None or time.monotonic() >= deadline:
+            return False
+        sleep(0.1)
+
+
 def here(app, *, modules=sys.modules, ps=_ps, popen=subprocess.Popen, activate=activate,
          platform: str | None = None, me: int | None = None, python: str = sys.executable,
-         at_exit=atexit.register) -> bool:
+         at_exit=atexit.register, wait: float = WAIT, sleep=time.sleep) -> bool:
     """這個模組的頁面要不要在這個程序裡開（見檔頭）。"""
     folder, title = app.module.folder, app.module.title
     pid = running_pid(folder, ps, me)
@@ -125,11 +162,20 @@ def here(app, *, modules=sys.modules, ps=_ps, popen=subprocess.Popen, activate=a
     run_py = Path(app.home).joinpath(*RUN_PY)
     if not run_py.is_file():
         return True
+    err, before = _errlog(Path(app.home)), _pid_text(folder)
     try:
-        popen([python, str(run_py), str(folder)], start_new_session=True,
-              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = popen([python, str(run_py), str(folder)], start_new_session=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=err)
     except OSError as exc:
         app.log(FAILED.format(why=REASONS.get(exc.errno, "系統拒絕了"), title=title))
+        return True
+    finally:
+        if err is not subprocess.DEVNULL:
+            err.close()
+    if not came_up(folder, proc, before, ps, me, wait, sleep):
+        with contextlib.suppress(Exception):  # 晚一點才起來的話，就會有兩個視窗
+            proc.terminate()
+        app.log(NOT_UP.format(title=title))
         return True
     app.log(OPENED.format(title=title))
     return False

@@ -30,6 +30,8 @@ if __name__ == "__main__" and "core.runner" not in sys.modules:
 # ── 互通 ──
 
 ICON = "🔗"
+# 用到的模組與角色（D160 R5）：跑完回去鈕回主控面板或行事曆、指令例子用開工、頁面上方那一排問 page.top
+NEEDS = ("主控面板", "行事曆", "開工", "page.top")
 HERE = pathlib.Path(__file__).resolve().parent
 EXAMPLE = "開工"  # 指令的例子優先用它；沒有就用最上層第一個模組
 # 這個檔被直接執行（python3 iplot.py）時，檔頭的 import 在那一小段之前跑，那時候 core 還不在 sys.path 上：
