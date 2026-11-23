@@ -117,10 +117,41 @@ def activate(pid: int | None, platform: str = sys.platform, run=subprocess.run) 
     return done.returncode == 0
 
 
-def launch(home: pathlib.Path, python: str, popen=subprocess.Popen) -> None:
-    """開一個新的面板：跟這個程序分開（關掉這個模組的小視窗不會連帶關掉面板）。"""
-    popen([python, str(home / "main.py")], cwd=str(home), start_new_session=True,
-          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+UP_FAILED = "它一開就結束了（原因記在 iPLoT 資料夾的 logs/separate.log）"
+
+
+def _errlog(home: pathlib.Path):
+    """另開的程序的 stderr 要接到哪裡：logs/separate.log（附加），開不了就丟掉。"""
+    try:
+        (home / "logs").mkdir(exist_ok=True)
+        return open(home / "logs" / "separate.log", "ab")  # noqa: SIM115  交給 Popen 之後就關
+    except OSError:
+        return subprocess.DEVNULL
+
+
+def _spawn(popen, argv, home: pathlib.Path, wait=None, **kw) -> bool:
+    """另開一個程序，等 wait 秒（環境變數 IPLOT_START_WAIT，預設 1）：這段時間裡出錯結束了（匯入就失敗、Python 起不來）
+    回 False，丟出去就當成功的做法不再用（D160 第 3 條）。stderr 接到 logs/separate.log，原因才留得下來。
+    Popen 本身失敗照樣丟 OSError。抄本：行事曆、主控面板、互通的 nav.py 各一份，要一樣（tools/copies.json）。"""
+    import time
+    err = _errlog(home)
+    try:
+        proc = popen(argv, start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=err, **kw)
+    finally:
+        if err is not subprocess.DEVNULL:
+            err.close()
+    deadline = time.monotonic() + (float(os.environ.get("IPLOT_START_WAIT", "1")) if wait is None else wait)
+    while time.monotonic() < deadline:
+        code = proc.poll()
+        if code is not None:
+            return code == 0
+        time.sleep(0.05)
+    return True
+
+
+def launch(home: pathlib.Path, python: str, popen=subprocess.Popen) -> bool:
+    """開一個新的面板：跟這個程序分開（關掉這個模組的小視窗不會連帶關掉面板）。一開就結束了回 False。"""
+    return _spawn(popen, [python, str(home / "main.py")], home, cwd=str(home))
 
 
 def open_panel(app, home: pathlib.Path, *, modules=None, ps=_ps, lsof=_lsof, popen=subprocess.Popen, activate=activate,
@@ -138,11 +169,11 @@ def open_panel(app, home: pathlib.Path, *, modules=None, ps=_ps, lsof=_lsof, pop
         app.log("主控面板已經開著，叫到最前面了" if activate(pid, platform) else "主控面板已經開著，但沒辦法把它叫到最前面。到 Dock 點一下 Python 的圖示")
         return
     try:
-        launch(home, sys.executable, popen)  # 在面板外：互通的 run.py 已經確認過這個 Python 跑得動面板（D86）
+        up = launch(home, sys.executable, popen)  # 在面板外：互通的 run.py 已經確認過這個 Python 跑得動面板（D86）
     except OSError as exc:
         app.log(f"打不開主控面板：{REASONS.get(exc.errno, '系統不讓打開')}。確認 iPLoT 資料夾還在，再雙擊一次")  # 原因是中文（體驗 7-08）
         return
-    app.log("打開主控面板")
+    app.log("打開主控面板" if up else f"打不開主控面板：{UP_FAILED}。再雙擊一次")
     if platform != "darwin":
         app.log("這個系統還不會把開著的面板叫到最前面")
 
