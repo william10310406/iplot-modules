@@ -64,6 +64,20 @@ def skip_group(parts: list[str], info: zipfile.ZipInfo) -> str | None:
     return None
 
 
+KEPT_DOTFILES = {".gitignore", ".gitattributes", ".editorconfig"}
+STATE_NAMES = {"設定.json"}
+
+
+def state_file(rel: str) -> bool:
+    """每台電腦自己的檔（iPLoT 0.8 的規則第 9 條，D160）：點開頭的檔或資料夾（.pid、.lock、.installed、.backup/…，
+    上面 skip_group 略過的那幾種與 .gitignore 這類除外）、設定.json、名字有 cache 的 .json。
+    這些是上傳者電腦上的執行狀態，跟著包發出去，裝的人就拿到上傳者的設定、快取，甚至帳號。"""
+    parts = unicodedata.normalize("NFC", rel).split("/")
+    last = parts[-1].casefold()
+    return (any(p.startswith(".") and p.casefold() not in KEPT_DOTFILES for p in parts)
+            or parts[-1] in STATE_NAMES or (last.endswith(".json") and "cache" in last))
+
+
 def bad_path(rel: str) -> bool:
     if not rel or rel.startswith("/") or "\\" in rel:
         return True
@@ -149,6 +163,9 @@ def inspect(zip_path: Path, staging: Path) -> Unpacked | Refusal:
         if clash is not None:
             return refuse("bad_path", path=clash)
         members = [(info, path[len(name) + 1:]) for info, path, is_dir in kept if not is_dir]
+        for _, rel in members:
+            if state_file(rel):
+                return refuse("state_file", path=f"{name}/{rel}")
         if len(members) > MAX_FILES:
             return refuse("too_many_files")
         if sum(info.file_size for info, _ in members) > MAX_UNPACKED:

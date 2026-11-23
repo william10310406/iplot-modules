@@ -262,5 +262,31 @@
         71483597
       ]
     ]
+  },
+  "整理": {
+    "name": "整理",
+    "owner_id": 71483597,
+    "owner": "william10310406",
+    "license": "MIT",
+    "copyright": [
+      [
+        2026,
+        "Wei-Heng Chien (簡偉恆)",
+        71483597
+      ]
+    ]
+  },
+  "導覽列": {
+    "name": "導覽列",
+    "owner_id": 71483597,
+    "owner": "william10310406",
+    "license": "MIT",
+    "copyright": [
+      [
+        2026,
+        "Wei-Heng Chien (簡偉恆)",
+        71483597
+      ]
+    ]
   }
 }
