@@ -141,11 +141,42 @@ def running_pid(folder: pathlib.Path, pid_file: pathlib.Path, ps=_ps, me: int | 
     return None
 
 
+UP_FAILED = "它一開就結束了（原因記在 iPLoT 資料夾的 logs/separate.log）"
+
+
+def _errlog(home: pathlib.Path):
+    """另開的程序的 stderr 要接到哪裡：logs/separate.log（附加），開不了就丟掉。"""
+    try:
+        (home / "logs").mkdir(exist_ok=True)
+        return open(home / "logs" / "separate.log", "ab")  # noqa: SIM115  交給 Popen 之後就關
+    except OSError:
+        return subprocess.DEVNULL
+
+
+def _spawn(popen, argv, home: pathlib.Path, wait=None, **kw) -> bool:
+    """另開一個程序，等 wait 秒（環境變數 IPLOT_START_WAIT，預設 1）：這段時間裡出錯結束了（匯入就失敗、Python 起不來）
+    回 False，丟出去就當成功的做法不再用（D160 第 3 條）。stderr 接到 logs/separate.log，原因才留得下來。
+    Popen 本身失敗照樣丟 OSError。抄本：行事曆、主控面板、互通的 nav.py 各一份，要一樣（tools/copies.json）。"""
+    import time
+    err = _errlog(home)
+    try:
+        proc = popen(argv, start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=err, **kw)
+    finally:
+        if err is not subprocess.DEVNULL:
+            err.close()
+    deadline = time.monotonic() + (float(os.environ.get("IPLOT_START_WAIT", "1")) if wait is None else wait)
+    while time.monotonic() < deadline:
+        code = proc.poll()
+        if code is not None:
+            return code == 0
+        time.sleep(0.05)
+    return True
+
+
 def launch(home: pathlib.Path, folder: pathlib.Path, *, popen=subprocess.Popen, python: str = sys.executable,
-           environ=os.environ) -> None:
-    """經互通的 run.py 另開一個行事曆的程序（跟這個程序分開；IPLOT_CALENDAR=1 記號）。"""
-    popen([python, str(home.joinpath(*RUN_PY)), str(folder)], env={**environ, ENV: "1"}, start_new_session=True,
-          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+           environ=os.environ) -> bool:
+    """經互通的 run.py 另開一個行事曆的程序（跟這個程序分開；IPLOT_CALENDAR=1 記號）。一開就結束了回 False。"""
+    return _spawn(popen, [python, str(home.joinpath(*RUN_PY)), str(folder)], home, env={**environ, ENV: "1"})
 
 
 def open_or_focus(app, folder: pathlib.Path, *, environ=os.environ, ps=_ps, popen=subprocess.Popen, activate=activate,
@@ -168,11 +199,11 @@ def open_or_focus(app, folder: pathlib.Path, *, environ=os.environ, ps=_ps, pope
         app.log(NO_INTEROP)
         return
     try:
-        launch(app.home, folder, popen=popen, environ=environ)
+        up = launch(app.home, folder, popen=popen, environ=environ)
     except OSError as exc:
         app.log(f"打不開行事曆：{diary.reason(exc)}。確認「互通」還在，再雙擊一次")
         return
-    app.log(OPENED)
+    app.log(OPENED if up else f"打不開行事曆：{UP_FAILED}。再雙擊一次")
 
 
 def _guarded(method):
@@ -347,12 +378,11 @@ class Api:
         if not run_py.is_file():
             return {"error": NO_INTEROP}
         try:
-            self._popen([sys.executable, str(run_py), str(found[0].folder)],
-                        env={k: v for k, v in self._environ.items() if k != ENV}, start_new_session=True,
-                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            up = _spawn(self._popen, [sys.executable, str(run_py), str(found[0].folder)], self._app.home,
+                        env={k: v for k, v in self._environ.items() if k != ENV})
         except OSError as exc:
             return {"error": CANNOT_LAUNCH.format(name=name, why=diary.reason(exc))}
-        return {}
+        return {} if up else {"error": CANNOT_LAUNCH.format(name=name, why=UP_FAILED)}
 
     @_guarded
     def settings(self):
