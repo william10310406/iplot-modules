@@ -614,5 +614,12 @@
   "what": "開工",
   "until": "1.0",
   "why": "過渡用的常數 BUNDLED／SYSTEM_MODULE／REPORT_MODULE（D159）：核心搬進 modules/ 時一起拿掉"
+ },
+ {
+  "rule": "R6",
+  "file": "core/text.py",
+  "what": "頁面",
+  "until": "1.0",
+  "why": "過渡用的常數 BUNDLED（D159）：隨附模組多了「頁面」（D161）；核心搬進 modules/ 時一起拿掉"
  }
 ]
