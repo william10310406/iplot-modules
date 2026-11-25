@@ -9,8 +9,8 @@ PROVIDES = {"menu.module": "items"}
 
 # 隨附的模組（核心的包帶的）：iPLoT 的功能要靠它們，不讓人在面板上改名或刪除（D155）。
 # tests/test_modify.py 對照 git 的內容，包多一個、少一個都會紅
-BUNDLED = frozenset({"主控面板", "互通", "作業系統", "回報與討論", "工作坊", "打開核心原始碼", "更新", "行事曆", "重新啟動",
-                     "開Terminal", "開工", "整理", "導覽列"})
+BUNDLED = frozenset({"主控面板", "互通", "作業系統", "回報與討論", "工作坊", "核心", "更新", "行事曆", "重新啟動",
+                     "開Terminal", "開工", "整理", "導覽列", "頁面"})
 FORBIDDEN_CHARS = set('/\\:*?"<>|')
 RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
