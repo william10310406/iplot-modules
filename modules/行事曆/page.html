@@ -108,6 +108,7 @@ const parse = (s) => { const [y, m, d] = s.split("-").map(Number); return new Da
 
 // 所有 Python 呼叫排成一條佇列：一個做完才送下一個（存與拖圖不會交錯）
 let last = Promise.resolve();
+let panelName = "";  // 面板（提供 main 的模組）的名字：右邊「圖示面板」按下去開的就是它
 const call = (name, ...args) => {
   const p = last.then(() => window.pywebview.api[name](...args));
   last = p.catch(() => null);
@@ -335,6 +336,7 @@ async function loadModules() {
     bar.append(b);
   }
   $("panel").hidden = !r.panel;
+  panelName = r.panel;
 }
 
 // 行事曆整天開著：視窗重新拿到焦點時重掃模組列，也重新算今天（過了午夜就換掉「今天」）
@@ -411,7 +413,7 @@ function wire() {
   $("reveal").addEventListener("click", () => call("reveal_folder"));
   $("openIndex").addEventListener("click", () => call("open_page", "index", ""));
   $("rebuild").addEventListener("click", async () => { say("重建中…"); const r = await call("rebuild"); if (!r.error) say("重建了 " + r.pages + " 頁"); });
-  $("panel").addEventListener("click", () => call("launch", "主控面板"));
+  $("panel").addEventListener("click", () => call("launch", panelName));
   $("files").addEventListener("change", (e) => { if (day) addFiles(e.target.files); e.target.value = ""; });
   window.addEventListener("focus", onFocus);  // 重掃模組列（設計第 15 節第 7 條）、過了午夜換「今天」
   window.addEventListener("pagehide", saveDay);   // 關視窗時盡力再存一次

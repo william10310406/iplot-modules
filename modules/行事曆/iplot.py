@@ -1,7 +1,7 @@
 """行事曆：打開就是這個月的月曆；每天寫行程、心情、看到了什麼、做了什麼，放圖片，存成一天一個資料夾並產生網頁。
 
-上方的模組列叫得到任何模組；任何模組寫 app.run("行事曆") 就叫得到它。行事曆的頁面只在它自己另開的程序裡開（D89）：
-在面板裡、或被別的模組叫到時，經「互通」的 run.py 另開一個程序；已經開著就叫到最前面。資料在 ~/Documents/行事曆
+上方的模組列叫得到任何模組；任何模組寫 app.run("行事曆") 就叫得到它。iPLoT 1.0 每按一次就在自己的程序裡跑（D161），
+頁面開著不卡面板；同一時間只開一個，已經開著就叫到最前面（D164）。資料在 ~/Documents/行事曆
 （⚙ 可以換），一天一個資料夾 <年>/<月>/<日>/，Finder 看得到；「發佈」只產生 發佈/ 資料夾，不上傳。"""
 import base64
 import binascii
@@ -11,28 +11,27 @@ import os
 import pathlib
 import subprocess
 
-# ── 互通 ── 直接執行這個檔（python3 iplot.py）時交給 iPLoT 用彈出式視窗跑；從 iPLoT 裡執行時這段不做事。不要可以整段刪掉
+# ── iPLoT ── 直接執行這個檔（python3 iplot.py）時交給 iPLoT 跑（python3 main.py --run）；從 iPLoT 裡執行時這段不做事。不要可以整段刪掉
 import sys
 
 if __name__ == "__main__" and "core.runner" not in sys.modules:
     import os
     import subprocess
     here = folder = os.path.dirname(os.path.abspath(__file__))
-    run = None
-    while run is None and folder != os.path.dirname(folder):  # 往上一層層找 iPLoT：模組在它裡面或旁邊都找得到
+    main = None
+    while main is None and folder != os.path.dirname(folder):  # 往上一層層找 iPLoT：模組在它裡面或旁邊都找得到
         folder = os.path.dirname(folder)
         try:
             names = [""] + sorted(os.listdir(folder))
         except OSError:
             names = [""]
-        runs = (os.path.join(folder, n, "modules", "互通", "run.py") for n in names)
-        run = next((r for r in runs if os.path.isfile(r)), None)
-    if run and not os.environ.get("IPLOT_DIRECT"):  # IPLOT_DIRECT=1：不交出去，照一般腳本跑（例如在編輯器裡除錯）
-        sys.exit(subprocess.call([sys.executable, run, here, *sys.argv[1:]]))
-    if not run:
-        print("找不到 iPLoT 的「互通」（先在工作坊裝「互通」；模組要放在 iPLoT 資料夾裡或它旁邊），照一般的 python3 iplot.py 跑",
-              file=sys.stderr)
-# ── 互通 ──
+        mains = (os.path.join(folder, n, "main.py") for n in names)
+        main = next((m for m in mains if os.path.isfile(m) and os.path.isdir(os.path.join(os.path.dirname(m), "core"))), None)
+    if main and not os.environ.get("IPLOT_DIRECT"):  # IPLOT_DIRECT=1：不交出去，照一般腳本跑（例如在編輯器裡除錯）
+        sys.exit(subprocess.call([sys.executable, main, "--run", here, *sys.argv[1:]]))
+    if not main:
+        print("找不到 iPLoT（模組要放在 iPLoT 資料夾裡或它旁邊），照一般的 python3 iplot.py 跑", file=sys.stderr)
+# ── iPLoT ──
 
 import threading
 import unicodedata
@@ -41,21 +40,14 @@ import diary
 import pages
 import photos
 
-try:  # 在 iPLoT 裡一定在；直接 python3 iplot.py（IPLOT_DIRECT=1）時 core 不在 sys.path 上
-    from core import scan
-    from core.text import SYSTEM_MODULE
-except ImportError:
-    scan, SYSTEM_MODULE = None, "作業系統"
-
 ICON = "📅"
-ENV = "IPLOT_CALENDAR"  # 行事曆自己另開的程序：一開始就從環境變數拿掉，之後從它開的子程序不會繼承
-PID = ".pid"
+NEEDS = ("os.activate",)  # 已經開著時叫它到最前面（D164）
+PROVIDES = {"home": "run"}  # 在面板外跑完一個模組，小視窗的回去鈕回到這裡（D93；以前看名字，1.0 起看這個角色）
+MIN_API = 7  # app.top_modules、每按一次在自己的程序裡跑（D161、D164）
+OPEN = (".local", "開著")  # 頁面開著的那個程序拿著這個檔的鎖、寫著它的 pid；每台電腦自己的，不進上傳的包（規則 9）
 SETTINGS = "設定.json"
 HERE = pathlib.Path(__file__).resolve().parent
 ICON_FILE = HERE / "icon.png"
-RUN_PY = ("modules", "互通", "run.py")
-NO_INTEROP = "行事曆要用「互通」另開視窗：到工作坊裝「互通」"
-OPENED = "打開行事曆"
 ALREADY = "行事曆已經開著"
 ALREADY_BEHIND = "行事曆已經開著（在 Dock 上找月曆的圖示）"
 CANNOT_WRITE = "存不進去：{why}。字還在，等一下會再試"
@@ -66,46 +58,6 @@ CANNOT_LAUNCH = "打不開「{name}」：{why}。到 iPLoT 的面板直接雙擊
 NO_PUBLIC = "還沒有打開「公開」的日子"
 UNPUBLISHED = "沒有公開的日子了，已經拿掉 發佈/"
 UPLOAD_NOTE = "上傳方式還沒設定：把『發佈』裡的東西放到網頁空間"
-PANEL = "主控面板"
-# macOS 14 起，自己不在最前面的 App 叫別人到最前面會被拒絕；不是 App 的一般 python 程序叫就可以（跟「主控面板」同一段）。
-# 被拒絕時交給這一小段在子程序裡叫：argv 是 [-c, lib 的路徑, pid]
-HELPER = ("import sys\n"
-          "sys.path.insert(0, sys.argv[1])\n"
-          "import AppKit\n"
-          "app = AppKit.NSRunningApplication.runningApplicationWithProcessIdentifier_(int(sys.argv[2]))\n"
-          "sys.exit(0 if app is not None and app.activateWithOptions_("
-          "AppKit.NSApplicationActivateIgnoringOtherApps) else 1)\n")
-
-
-def _ps() -> str:
-    """所有程序的 pid 與完整指令。一定用 UTF-8 的 locale 叫 ps（從 Dock 開的程式沒有 locale，中文路徑會變成跳脫字）；-ww 不截斷。"""
-    try:
-        return subprocess.run(["ps", "-axww", "-o", "pid=,command="], capture_output=True, encoding="utf-8",
-                              errors="replace", env={**os.environ, "LC_ALL": "en_US.UTF-8"}, check=False).stdout
-    except OSError:
-        return ""
-
-
-def activate(pid: int | None, platform: str = sys.platform, run=subprocess.run) -> bool:
-    """把 pid（None 是自己）叫到最前面；macOS 以外、或載不進 AppKit 就回 False。照抄「主控面板」的做法。"""
-    if platform != "darwin":
-        return False
-    try:
-        import AppKit
-    except ImportError:
-        return False
-    running = AppKit.NSRunningApplication
-    app = running.currentApplication() if pid is None else running.runningApplicationWithProcessIdentifier_(pid)
-    if app is not None and app.activateWithOptions_(AppKit.NSApplicationActivateIgnoringOtherApps):
-        return True
-    lib = str(pathlib.Path(AppKit.__file__).parents[1])
-    target = os.getpid() if pid is None else pid
-    try:
-        done = run([sys.executable, "-c", HELPER, lib, str(target)], stdin=subprocess.DEVNULL,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return done.returncode == 0
 
 
 def set_dock_icon(path: pathlib.Path, platform: str = sys.platform) -> bool:
@@ -124,86 +76,53 @@ def set_dock_icon(path: pathlib.Path, platform: str = sys.platform) -> bool:
     return True
 
 
-def running_pid(folder: pathlib.Path, pid_file: pathlib.Path, ps=_ps, me: int | None = None) -> int | None:
-    """.pid 記的程序還活著、而且它的指令裡有互通的 run.py 與這個資料夾，才回它的 pid；否則 None（過期）。"""
-    me = os.getpid() if me is None else me
+LOCK_AT = 1 << 20  # Windows 鎖的那一格：在檔尾之後，不擋讀 pid
+
+
+def hold(path: pathlib.Path):
+    """拿「開著」的鎖：拿到了寫上這個程序的 pid、回打開的檔（關掉或程序結束鎖就放掉，不會留下過期的記號）；
+    別的程序拿著（行事曆已經開著）回 None。鎖是系統的檔案鎖（macOS／Linux 的 flock、Windows 的 msvcrt）。
+    Windows 的鎖會擋住別人讀那一段，所以鎖在 pid 後面很遠的一格（LOCK_AT），別人照樣讀得到 pid。"""
+    path.parent.mkdir(exist_ok=True)
+    f = open(path, "a+", encoding="utf-8")  # noqa: SIM115  開著的期間一直拿著，關頁面時才關
     try:
-        pid = int(pid_file.read_text(encoding="utf-8").strip())
+        if os.name == "nt":
+            import msvcrt
+            f.seek(LOCK_AT)
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return None
+    f.seek(0)
+    f.truncate()
+    f.write(str(os.getpid()))
+    f.flush()
+    return f
+
+
+def open_pid(path: pathlib.Path) -> int | None:
+    """開著的那個程序的 pid；讀不到（檔壞了、沒寫完）回 None。"""
+    try:
+        return int(path.read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         return None
-    if pid == me:
-        return None
-    target = unicodedata.normalize("NFC", str(folder))
-    for line in unicodedata.normalize("NFC", ps()).splitlines():
-        pid_text, _, command = line.strip().partition(" ")
-        if pid_text == str(pid):
-            return pid if "run.py" in command and target in command else None
-    return None
 
 
-UP_FAILED = "它一開就結束了（原因記在 iPLoT 資料夾的 logs/separate.log）"
-
-
-def _errlog(home: pathlib.Path):
-    """另開的程序的 stderr 要接到哪裡：logs/separate.log（附加），開不了就丟掉。"""
+def open_or_focus(app, folder: pathlib.Path, *, hold=hold, api=None) -> None:
+    """同一時間只開一個行事曆：已經開著 → 請作業系統模組叫它到最前面（叫不動就說去哪裡找）；沒開 → 開頁面，關掉才回來。
+    頁面在這次按下的程序裡開（D161），面板不會被卡住。"""
+    lock = hold(folder.joinpath(*OPEN))
+    if lock is None:
+        pid = open_pid(folder.joinpath(*OPEN))
+        app.log(ALREADY if pid is not None and app.call("os.activate", pid) else ALREADY_BEHIND)
+        return
     try:
-        (home / "logs").mkdir(exist_ok=True)
-        return open(home / "logs" / "separate.log", "ab")  # noqa: SIM115  交給 Popen 之後就關
-    except OSError:
-        return subprocess.DEVNULL
-
-
-def _spawn(popen, argv, home: pathlib.Path, wait=None, **kw) -> bool:
-    """另開一個程序，等 wait 秒（環境變數 IPLOT_START_WAIT，預設 1）：這段時間裡出錯結束了（匯入就失敗、Python 起不來）
-    回 False，丟出去就當成功的做法不再用（D160 第 3 條）。stderr 接到 logs/separate.log，原因才留得下來。
-    Popen 本身失敗照樣丟 OSError。抄本：行事曆、主控面板、互通的 nav.py 各一份，要一樣（tools/copies.json）。"""
-    import time
-    err = _errlog(home)
-    try:
-        proc = popen(argv, start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=err, **kw)
+        app.page("行事曆", (folder / "page.html").read_text(encoding="utf-8"), api or Api(app, folder / SETTINGS))
     finally:
-        if err is not subprocess.DEVNULL:
-            err.close()
-    deadline = time.monotonic() + (float(os.environ.get("IPLOT_START_WAIT", "1")) if wait is None else wait)
-    while time.monotonic() < deadline:
-        code = proc.poll()
-        if code is not None:
-            return code == 0
-        time.sleep(0.05)
-    return True
-
-
-def launch(home: pathlib.Path, folder: pathlib.Path, *, popen=subprocess.Popen, python: str = sys.executable,
-           environ=os.environ) -> bool:
-    """經互通的 run.py 另開一個行事曆的程序（跟這個程序分開；IPLOT_CALENDAR=1 記號）。一開就結束了回 False。"""
-    return _spawn(popen, [python, str(home.joinpath(*RUN_PY)), str(folder)], home, env={**environ, ENV: "1"})
-
-
-def open_or_focus(app, folder: pathlib.Path, *, environ=os.environ, ps=_ps, popen=subprocess.Popen, activate=activate,
-                  platform: str | None = None, me: int | None = None, api=None) -> None:
-    """設計第 3.1 節的三步：已經開著 → 叫到最前面；這是行事曆自己另開的程序 → 開頁面；其他 → 另開一個。"""
-    platform = platform or sys.platform
-    pid = running_pid(folder, folder / PID, ps, me)
-    if pid is not None:
-        app.log(ALREADY if platform == "darwin" and activate(pid, platform) else ALREADY_BEHIND)
-        return
-    if environ.get(ENV):
-        environ.pop(ENV, None)
-        diary.write_text(folder / PID, str(os.getpid()))
-        try:
-            app.page("行事曆", (folder / "page.html").read_text(encoding="utf-8"), api or Api(app, folder / SETTINGS))
-        finally:
-            (folder / PID).unlink(missing_ok=True)
-        return
-    if not app.home.joinpath(*RUN_PY).is_file():
-        app.log(NO_INTEROP)
-        return
-    try:
-        up = launch(app.home, folder, popen=popen, environ=environ)
-    except OSError as exc:
-        app.log(f"打不開行事曆：{diary.reason(exc)}。確認「互通」還在，再雙擊一次")
-        return
-    app.log(OPENED if up else f"打不開行事曆：{UP_FAILED}。再雙擊一次")
+        lock.close()
 
 
 def _guarded(method):
@@ -228,11 +147,11 @@ class Api:
     頁面傳進來的只有日期、名稱、圖片的檔名與內容，沒有一個方法收路徑；路徑一律是絕對的。"""
 
     def __init__(self, app, settings_file: pathlib.Path, *, default_root: pathlib.Path | None = None,
-                 run=subprocess.run, popen=subprocess.Popen, platform: str = sys.platform, environ=os.environ,
-                 today=datetime.date.today, dock_icon=set_dock_icon) -> None:
+                 run=subprocess.run, platform: str = sys.platform, today=datetime.date.today,
+                 dock_icon=set_dock_icon) -> None:
         self._app, self._settings = app, pathlib.Path(settings_file).absolute()
         self._default_root = (default_root or pathlib.Path.home() / "Documents" / "行事曆").absolute()
-        self._run, self._popen, self._platform, self._environ = run, popen, platform, environ
+        self._run, self._platform = run, platform
         self._today, self._dock_icon, self._icon_done = today, dock_icon, False
         self._lock = threading.Lock()
 
@@ -248,14 +167,10 @@ class Api:
         root = self._root()
         return {"folder": str(root), "public_days": len(diary.all_days(root, public_only=True))}
 
-    def _scan(self, panel: bool) -> list:
-        """最上層（與 ROOTS）現在的模組，每次重掃（設計第 15 節第 7 條）；不含作業系統與行事曆自己。"""
-        if scan is None:
-            return []
-        roots = scan.roots_from_config(self._app.home, self._app.config.roots)
-        found = [m for group in scan.find_modules(roots) for m in group.modules]
-        skip = {SYSTEM_MODULE, HERE.name} | (set() if panel else {PANEL})
-        return [m for m in found if m.name not in skip]
+    def _scan(self) -> list:
+        """每個根目錄最上層現在的模組，每次重掃（設計第 15 節第 7 條）；不含行事曆自己與碰作業系統的模組（提供 os.*）。"""
+        return [m for m in self._app.top_modules() if m.folder != HERE
+                and not any(role.startswith("os.") for role, _ in m.provides)]
 
     @_guarded
     def month(self, ym):
@@ -363,26 +278,25 @@ class Api:
 
     @_guarded
     def modules(self):
-        mods = self._scan(panel=False)
-        everything = [m.name for m in self._scan(panel=True)]
-        return {"modules": [{"name": m.name, "icon": m.icon or m.title[:1], "title": m.title} for m in mods],
-                "panel": everything.count(PANEL) == 1}
+        """模組列：面板（提供 main 的）不放在列裡，放在右邊的「圖示面板」；回它的名字，沒有面板是 ""。"""
+        found = self._scan()
+        panels = [m for m in found if any(role == "main" for role, _ in m.provides)]
+        return {"modules": [{"name": m.name, "icon": m.icon or m.title[:1], "title": m.title}
+                            for m in found if m not in panels],
+                "panel": panels[0].name if len(panels) == 1 else ""}
 
     @_guarded
     def launch(self, name):
+        """開始跑模組列上的一個模組（app.start：它在自己的程序裡跑，行事曆不用等它）。"""
         wanted = unicodedata.normalize("NFC", str(name))
-        found = [m for m in self._scan(panel=True) if unicodedata.normalize("NFC", m.name) == wanted]
+        found = [m for m in self._scan() if unicodedata.normalize("NFC", m.name) == wanted]
         if len(found) != 1:
             return {"error": NOT_FOUND.format(name=name)}
-        run_py = self._app.home.joinpath(*RUN_PY)
-        if not run_py.is_file():
-            return {"error": NO_INTEROP}
         try:
-            up = _spawn(self._popen, [sys.executable, str(run_py), str(found[0].folder)], self._app.home,
-                        env={k: v for k, v in self._environ.items() if k != ENV})
+            self._app.start(found[0])
         except OSError as exc:
             return {"error": CANNOT_LAUNCH.format(name=name, why=diary.reason(exc))}
-        return {} if up else {"error": CANNOT_LAUNCH.format(name=name, why=UP_FAILED)}
+        return {}
 
     @_guarded
     def settings(self):
