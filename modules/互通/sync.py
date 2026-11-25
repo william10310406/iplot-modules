@@ -4,7 +4,6 @@
 同步只寫「互通」自己的資料夾。舊模組要加上那一小段，只能在「互通」的狀態頁按「加上」（iplot.py 的 patch），
 只限 iPLoT 的 modules/。這裡另外放兩件狀態頁也用的事：列出所有模組（modules）、為什麼不加（why_not）。"""
 
-import ast  # noqa: I001  core 在 iPLoT 是第一方、在 iplot-modules 是第三方：兩邊的 isort 要的空行不一樣
 import contextlib
 import os
 import sys
@@ -14,32 +13,37 @@ from pathlib import Path
 import shortcut
 from boot import plain
 
-from core import scan
-from core.text import SYSTEM_MODULE
-from core.types import Config, ModuleInfo, Root
-
 LOCK, ERRORS = ".lock", ".sync-error"
 STALE = 120  # 秒：比這個舊的鎖當作上次沒清掉
-BUNDLED = ("作業系統", "更新", "工作坊")  # iPLoT 自己要用的三個隨附模組，不加那一小段
-TK = ("tkinter", "_tkinter", "turtle")  # 在面板外開不了它們的視窗（run.py 擋著）
+# iPLoT 自己要用的隨附模組：不加那一小段（加了會讓它跟隨附的那一份不一樣，0.8 驗收的小問題 3）
+BUNDLED = ("作業系統", "更新", "工作坊", "整理", "導覽列", "頁面")
 
 
-def modules(home: Path, config: Config) -> list[tuple[ModuleInfo, list[str]]]:
-    """ROOTS 底下所有模組，一路往下到每一層；每個模組帶著它一路的顯示名稱（給捷徑的「父 › 子」）。"""
-    found: list[tuple[ModuleInfo, list[str]]] = []
+def modules(app) -> list:
+    """ROOTS 底下所有模組，一路往下到每一層；每個模組帶著它一路的顯示名稱（給捷徑的「父 › 子」）。回 [(ModuleInfo, 名稱們)]。"""
+    found = []
 
-    def walk(info: ModuleInfo, titles: list[str]) -> None:
+    def walk(info, titles: list[str]) -> None:
         found.append((info, titles))
-        for child in scan.find_children(info.folder, info.root):
+        for child in app.children_of(info):
             walk(child, [*titles, child.title])
 
-    for group in scan.find_modules(scan.roots_from_config(home, config.roots)):
-        for info in group.modules:
-            walk(info, [info.title])
+    for info in app.top_modules():
+        walk(info, [info.title])
     return found
 
 
-def why_not(info: ModuleInfo, roots: list[Root]) -> str | None:
+def levels(app) -> dict:
+    """每個根目錄是哪一種：{根目錄的路徑: "here"（modules/）、"parent"（上一層）或 "extra"（ROOTS 另外加的）}。"""
+    return {info.root: info.level for info in app.top_modules()}
+
+
+def is_system(info) -> bool:
+    """碰作業系統的模組（宣告 os.* 的，隨附的「作業系統」）：不做捷徑、不算在「能在面板外打開」裡。不看名字（D164）。"""
+    return info.level != "child" and any(role.startswith("os.") for role, _ in info.provides)
+
+
+def why_not(info, levels: dict) -> str | None:
     """這個模組不加那一小段的原因；可以加就回 None（還要再看在不在 modules/ 裡、讀不讀得懂，見 iplot.py 的 candidates）。"""
     if info.file.is_symlink():
         return "是符號連結"
@@ -47,34 +51,18 @@ def why_not(info: ModuleInfo, roots: list[Root]) -> str | None:
         return "工作坊裝來的"  # 自己或上面任何一層是工作坊裝來的：加了會讓那一個變「已修改」（D77）
     if info.level == "here" and info.name in BUNDLED:
         return "隨附模組"
-    if any(r.level == "extra" and r.path == info.root for r in roots):
+    if levels.get(info.root) == "extra":
         return "在 ROOTS 另外加的資料夾裡"  # 那一小段在那裡找不到 iPLoT
-    if _uses_tk(info.file):
-        return "用了 tkinter 或 turtle"  # 加了之後直接執行會交給 run.py，而 run.py 開不了 tkinter 的視窗
     return None
 
 
-def _from_workshop(info: ModuleInfo) -> bool:
+def _from_workshop(info) -> bool:
     """模組資料夾往上到根目錄（不含根目錄本身），任何一層有 .origin 就是工作坊裝來的。"""
     folder = info.folder
     while folder != info.root and folder != folder.parent:
         if (folder / ".origin").exists():
             return True
         folder = folder.parent
-    return False
-
-
-def _uses_tk(file: Path) -> bool:
-    """iplot.py 裡有沒有 import tkinter／turtle（任何一層、任何寫法）；讀不懂就當作沒有（讀不懂的另外不列成候選）。"""
-    try:
-        tree = ast.parse(file.read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError, SyntaxError):
-        return False
-    for node in ast.walk(tree):
-        names = ([a.name for a in node.names] if isinstance(node, ast.Import)
-                 else [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
-        if any(n.split(".")[0] in TK for n in names):
-            return True
     return False
 
 
@@ -102,8 +90,7 @@ def _write(path: Path, text: str) -> None:
         tmp.unlink(missing_ok=True)
 
 
-def sync(home: Path, config: Config, python: str, folder: Path, platform: str = sys.platform,
-         now=time.time) -> list[str]:
+def sync(app, python: str, folder: Path, platform: str = sys.platform, now=time.time) -> list[str]:
     """同步一次（folder 是 modules/互通）：做捷徑、寫 .sync-error。不改任何模組檔案（D87）。
     回這一次的問題，一個一句；有人正在同步就跳過、回空清單。"""
     lock = folder / LOCK
@@ -112,8 +99,7 @@ def sync(home: Path, config: Config, python: str, folder: Path, platform: str = 
     try:
         problems: list[str] = []
         if platform == "darwin":
-            wanted = shortcut.names([(titles, info.folder) for info, titles in modules(home, config)
-                                     if not (info.level == "here" and info.name == SYSTEM_MODULE)])
+            wanted = shortcut.names([(titles, info.folder) for info, titles in modules(app) if not is_system(info)])
             problems += shortcut.sync(folder / shortcut.FOLDER, wanted, python, folder / "run.py")
         try:
             if problems:

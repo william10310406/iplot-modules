@@ -2,9 +2,9 @@
 
 照核心的 View 做八個方法（docs/07 第 13 節）。執行緒的做法跟網頁面板一樣：主執行緒是 pywebview 的事件迴圈，
 模組在工作執行緒上跑；頁面呼叫 Python 的方法只排工作、立刻回傳；對話框用 threading.Event 等頁面回答。
-不 import ui/（ui/ 是核心的一部分，D80）；錯誤講成一句話用 core.errors.describe。"""
+不 import 核心、ui/（D80、D164）；錯誤講成一句話用交進來的 core 的 describe。"""
 
-import contextlib  # noqa: I001  core 在 iPLoT 是第一方、在 iplot-modules 是第三方：兩邊的 isort 要的空行不一樣
+import contextlib
 import itertools
 import json
 import os
@@ -13,22 +13,18 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import nav
-from core.errors import describe
-from core.types import ErrorInfo, Scope
-
 PAGE = Path(__file__).with_name("popup.html")
-PANEL = "主控面板"  # 跑完之後底下那一列的回去鈕：最上層剛好一個「行事曆」就回行事曆（D93），否則回主控面板（D88）
-CALENDAR = "行事曆"
 CANCELLED = "模組『{module}』已取消"  # 提問框按了取消（體驗 7-06）；核心 0.5 沒有 InputCancelled，那邊照舊是錯誤
 
 
 def mac_dock(regular: bool) -> None:
-    """macOS：藏著的期間不在 Dock（accessory），顯示時回到一般的 App（regular）。Task 0 量過：
-    pywebview 在 import 平台模組時就設成 regular，所以先 import 它、再改。"""
-    import AppKit
-    import webview.platforms.cocoa  # noqa: F401  （設 regular 的那一行在這裡跑，要在它之後改）
-    from PyObjCTools import AppHelper
+    """macOS：藏著的期間不在 Dock（accessory），顯示時回到一般的 App（regular）。pywebview 開視窗時會設成 regular，
+    所以藏起來的那一次在頁面載入之後才設（_loaded）；不 import pywebview 的內部（R4）。沒有 AppKit 就不做。"""
+    try:
+        import AppKit
+        from PyObjCTools import AppHelper
+    except ImportError:
+        return
 
     app = AppKit.NSApplication.sharedApplication()
     policy = (AppKit.NSApplicationActivationPolicyRegular if regular
@@ -62,7 +58,7 @@ class Bridge:
         self._popup.window.destroy()
 
     def panel(self) -> None:
-        """回去鈕：跑最上層那個模組（「行事曆」或「主控面板」）；沒出錯就關掉小視窗（D93、D88）。"""
+        """回去鈕：跑提供 home 的模組（行事曆）或面板；沒出錯就關掉小視窗（D93、D88）。"""
         self._popup.open_panel()
 
 
@@ -75,12 +71,11 @@ class Popup:
         self.exit, self._dock = exit, dock
         self.core: Any = None
         self.window: Any = None
-        self.errors: list[ErrorInfo] = []
+        self.errors: list = []  # 錯誤（有 kind、message、file、line、traceback_text 的物件）
         self._lock = threading.Lock()
         self._running = threading.Lock()  # 模組在跑的期間拿著；「打開檔案」等它跑完才做（runner 一次只跑一個）
         self._panel = threading.Lock()  # 回去鈕一次只跑一個：連按兩下不會開兩次
-        self._back: str | None = None  # 回去鈕跑的模組名稱；done 時由 run.py 給
-        self._pages: list = []  # 開著的頁面視窗：已經有一頁開著，新的一頁不畫導覽列（D154）
+        self._back: Any = None  # 回去鈕跑的模組（ModuleInfo）；done 時由 window.py 給
         self._paging = False  # app.page 的視窗開著：小視窗不因「跑太久」出來，關它也只是藏起來
         self._said = 0  # 小視窗說過幾次話（訊息、錯誤、執行中、問問題、跑完）；選檔案時用來判斷能不能藏回去
         self._ids = itertools.count(1)
@@ -113,6 +108,8 @@ class Popup:
     def _loaded(self, job: Callable[[], int]) -> None:
         """頁面載入完成：先給頁面標題，再開工作執行緒；只做一次（重新載入不再跑一次）。"""
         self._js("init", {"title": self.title})
+        if self._dock and not self._shown:
+            self._dock(False)  # pywebview 開視窗時設成了一般的 App：藏著的期間不在 Dock
         if self._worker is None:
             self._worker = threading.Thread(target=self._work, args=(job,), daemon=True)
             self._worker.start()
@@ -173,20 +170,20 @@ class Popup:
                 event.set()
             self._waiting.clear()
 
-    def done(self, outcome: str, seconds: float, back: str | None = None) -> None:
+    def done(self, outcome: str, seconds: float, back: Any = None) -> None:
         """模組跑完了：outcome 是 "ok"、"cancelled" 或 "error"。小視窗沒出現過、又沒出錯，就直接關；
         否則交給頁面：成功是「完成（x 秒），3 秒後關閉」的倒數，出錯是「出錯了」與「關閉」。
-        back 是回去鈕上的名字、按下去跑的模組（D93：「行事曆」或「主控面板」；給不給、給哪個由 run.py 決定）。"""
+        back 是回去鈕按下去跑的模組（D93：行事曆或面板；給不給、給哪個由 window.py 決定），鈕上寫它的名字。"""
         self._finished, self._back = True, back
         if not self._shown and outcome != "error":
             self.window.destroy()
             return
         self._reveal()
-        self._js("done", outcome, round(seconds, 1), back)
+        self._js("done", outcome, round(seconds, 1), None if back is None else back.title)
 
     def open_panel(self) -> None:
-        """回去鈕：在另一條執行緒上、等模組與同步跑完（跟「打開檔案」一樣），用這個 Core 跑最上層的 back 那個模組
-        （「行事曆」或「主控面板」）。沒出錯就關掉小視窗；出錯照一般的錯誤顯示，小視窗留著。沒有 back 就不做事。
+        """回去鈕：在另一條執行緒上、等模組與同步跑完（跟「打開檔案」一樣），用這個 Core 按下 back 那個模組
+        （行事曆或面板）。沒出錯就關掉小視窗；出錯照一般的錯誤顯示，小視窗留著。沒有 back 就不做事。
         程序的結束碼不變（還是原本那個模組的）。"""
         back = self._back
         if back is None:
@@ -197,11 +194,7 @@ class Popup:
                 return
             try:
                 with self._running:
-                    try:
-                        result = self.core.run_by_name(back)
-                    except LookupError as exc:  # 跑完之後才被刪掉、或有兩個
-                        self.log(str(exc))
-                        return
+                    result = self.core.press(back, quiet=True)
                 if result.ok:
                     self.window.destroy()
             finally:
@@ -254,7 +247,7 @@ class Popup:
 
     # View 的八個方法
 
-    def show(self, scope: Scope) -> None:
+    def show(self, scope: Any) -> None:
         """小視窗沒有模組的清單：不做事。"""
 
     def log(self, text: str) -> None:
@@ -262,7 +255,7 @@ class Popup:
         self._reveal()
         self._js("log", text)
 
-    def report(self, error: ErrorInfo) -> None:
+    def report(self, error: Any) -> None:
         """顯示錯誤：白話一句、「打開檔案」、「詳細」（traceback）。在提問框按取消不是錯誤，只說一行「已取消」。"""
         if error.kind == "InputCancelled":
             self.log(CANCELLED.format(module=error.module))
@@ -271,7 +264,7 @@ class Popup:
         self.errors.append(error)
         self._js("report", {"kind": error.kind, "message": error.message,
                             "file": None if error.file is None else str(error.file), "line": error.line,
-                            "traceback": error.traceback_text, "sentence": describe(error),
+                            "traceback": error.traceback_text, "sentence": self.core.describe(error),
                             "id": len(self.errors) - 1})
 
     def ask(self, prompt: str, default: str = "") -> str | None:
@@ -283,22 +276,22 @@ class Popup:
         """小視窗裡的「確定／取消」；按確定回 True。"""
         return self._dialog("confirm", prompt) is True
 
+    def paging(self, title: str, opened: bool) -> None:
+        """模組在自己的程序裡開了（opened）或關了頁面（iPLoT 1.0，D166）：開著的期間小視窗不因「跑太久」出來。"""
+        self._paging = opened
+
     def page(self, title: str, html: str, api: object | None) -> None:
-        """另開一個 640×520 的視窗顯示一頁 HTML（app.page），關掉才回來；不會因此把小視窗叫出來。
-        開之前回到一般的 App（在 Dock、在 ⌘-Tab 裡）：被別的視窗蓋住時要找得回來，模組在等它關。
-        在模組執行中開的、而且沒有別的頁面開著，就多一排導覽列（nav.py，D154）。"""
+        """另開一個 640×520 的視窗顯示一頁 HTML（app.page），關掉才回來；不會因此把小視窗叫出來。iPLoT 1.0 的頁面在模組
+        自己的程序裡由「頁面」模組開（D161），走到這裡的只有沒有那個模組的時候；導覽列也是那邊畫。
+        開之前回到一般的 App（在 Dock、在 ⌘-Tab 裡）：被別的視窗蓋住時要找得回來，模組在等它關。"""
         if self._dock:
             self._dock(True)
         self._paging = True
         try:
             window = self.webview.create_window(title, html=html, js_api=api, width=640, height=520)
-            if getattr(self.core, "running", None) and not self._pages:
-                nav.Nav(window, self.core, self.log)
-            self._pages.append(window)
             closed = threading.Event()
             window.events.closed += closed.set
             closed.wait()
-            self._pages.remove(window)
         finally:
             self._paging = False
 

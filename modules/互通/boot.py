@@ -1,4 +1,5 @@
-"""「互通」的開場：找 iPLoT、確認 Python 對不對、核對核心版本、提示框（D86）。
+"""「互通」的開場：找 iPLoT、確認 Python 對不對、提示框（D86）。1.0 起不看核心的版本（互通 1.0 只跟 iPLoT 1.0 一起來，
+從工作坊裝到舊版上時，工作坊與面板會說「請先更新」），也不 import 核心（D164）。
 
 run.py 一開始就用這個檔，那時候跑的可能是系統內建的舊 Python（從 Spotlight、Dock 開的程式拿不到終端機的 PATH），
 所以這個檔只用 Python 3.8 就有的語法、只 import 標準庫（跟 main.py 的 D46 同一個理由）。"""
@@ -15,14 +16,11 @@ import sys
 from pathlib import Path
 
 REEXEC = "IPLOT_INTEROP_REEXEC"  # 換過一次 Python 的記號：換過還不行就說一句，不再換
-MIN_CORE = (0, 5)  # 只擋下限：核心 ≥ 0.5 而且 api_version ≥ MIN_API 就放行，核心升次版本不必等互通先發（D151）；0.5 沒有 home_path，run.py 照舊（D117）
-MIN_API = 3
 RECORD = ".python"
 OLD = "互通需要 Python 3.10 以上，這個是 {version}。先在面板按一次「互通」，讓它記下面板用的 Python。"
 NO_LIB = ("這個 Python（{exe}）載不進 iPLoT 的介面套件：{reason}（lib/ 可能是給別的 Python 裝的）。"
           "先在面板按一次「互通」，讓它記下面板用的 Python。")
 STILL = "換成記下的 Python（{exe}）還是開不起來：{reason}。在面板按一次「互通」重新記下。"
-VERSION = "互通 {mine} 需要 iPLoT 0.5 以上，這台是 {found}。iPLoT 太舊，按「更新」。"
 ALERT = ["osascript", "-e", "on run argv",
          "-e", "display alert (item 1 of argv) message (item 2 of argv) as critical", "-e", "end run"]
 
@@ -33,7 +31,7 @@ REASONS = {errno.ENOSPC: "磁碟滿了", errno.EACCES: "沒有權限", errno.EPE
 
 def plain(exc: BaseException) -> str:
     """寫檔、改檔、做捷徑失敗的原因：一句中文，不貼系統的英文原文（Permission denied、codec can't decode…）（體驗 7-01）。
-    互通支援核心 0.5 與 0.6，用不到之後才有的 core.errors.reason，所以這裡自己帶一份。"""
+    互通不 import 核心，所以這裡自己帶一份（跟核心的 core.errors.reason 說法一樣）。"""
     if isinstance(exc, UnicodeError):
         return "檔案不是 UTF-8 的文字"
     if isinstance(exc, OSError):
@@ -42,9 +40,9 @@ def plain(exc: BaseException) -> str:
 
 
 def iplot_home(run_file: str) -> Path | None:
-    """run.py 往上兩層（modules/互通/run.py → iPLoT）；那裡有 core/app.py 與 main.py 才是 iPLoT。"""
+    """run.py 往上兩層（modules/互通/run.py → iPLoT）；那裡有 main.py 與 modules/ 才是 iPLoT。"""
     home = Path(os.path.abspath(run_file)).parent.parent.parent
-    if (home / "core" / "app.py").is_file() and (home / "main.py").is_file():
+    if (home / "main.py").is_file() and (home / "modules").is_dir():
         return home
     return None
 
@@ -107,7 +105,7 @@ def own_version(folder: Path) -> str:
 def ensure_python(home: Path, folder: Path, run_file: str, argv: list[str], *, version=sys.version_info,
                   importer=importlib.import_module, environ=os.environ, execv=os.execv,
                   exe: str = sys.executable) -> str | None:
-    """確認這個 Python 跑得動 iPLoT：3.10 以上，而且載得進 core 與 lib/ 的 pywebview。
+    """確認這個 Python 跑得動 iPLoT：3.10 以上，而且載得進 lib/ 的 pywebview（小視窗要用）。
     跑不動時，有記下的、存在的、不是這一個的 Python，又還沒換過，就換成它重跑一次（os.execv 不回來）；
     否則回第 8 節那一句。跑得動回 None。sys.path 最前面放 iPLoT、再來 lib/（跟 main.py 一樣）。"""
     sys.path[:0] = [str(home), str(home / "lib")]
@@ -116,7 +114,6 @@ def ensure_python(home: Path, folder: Path, run_file: str, argv: list[str], *, v
         reason = "這個是 Python {}，要 3.10 以上".format(".".join(str(v) for v in version[:3]))
     else:
         try:
-            importer("core")
             importer("webview")
         except Exception as exc:  # noqa: BLE001  lib/ 的編譯檔是給別的 Python 的：什麼錯都有可能
             reason = str(exc) or type(exc).__name__
@@ -137,11 +134,3 @@ def ensure_python(home: Path, folder: Path, run_file: str, argv: list[str], *, v
     if tuple(version[:2]) < (3, 10):
         return OLD.format(version=".".join(str(v) for v in version[:3]))
     return NO_LIB.format(exe=exe, reason=reason)
-
-
-def check_version(core_version: str, api_version: int, mine: str) -> str | None:
-    """核心 ≥ MIN_CORE 而且 api_version ≥ MIN_API 才回 None；讀不出版本、太舊都回那一句。"""
-    found = re.match(r"(\d+)\.(\d+)", core_version)
-    if found and (int(found[1]), int(found[2])) >= MIN_CORE and api_version >= MIN_API:
-        return None
-    return VERSION.format(mine=mine, found=core_version)

@@ -218,7 +218,7 @@ iplot.busy = (title) => {
 };
 
 // 跑完了：成功或取消是「完成（x 秒），3 秒後關閉」的倒數，在視窗裡按任何一下就停下來、多一個「關閉」；出錯是「出錯了」與「關閉」。
-// offer 是回去鈕上的名字（「行事曆」或「主控面板」，由 run.py 決定，D93、D88）；null 就不給
+// offer 是回去鈕上的名字（提供 home 的模組或面板，由 window.py 決定，D93、D88）；null 就不給
 iplot.done = (outcome, seconds, offer) => {
   if (countdown !== null) window.iplotClock.stop(countdown);
   countdown = null;
