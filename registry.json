@@ -35,10 +35,10 @@
     "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
-    "version": "0.5.2",
-    "notes": "### 修正\n- docs 或設計文件被刪掉時，最後一行說哪個找不到，不再說「都開了」。",
-    "issue": 30,
-    "updated": "2026-11-15",
+    "version": "0.5.3",
+    "notes": "在編輯器裡直接執行 `iplot.py` 時，檔頭那一小段改成交給 iPLoT 的 `python3 main.py --run`，不再寫死「互通」的路徑（D163）。要 iPLoT 0.9。",
+    "issue": 57,
+    "updated": "2026-11-25",
     "license": "MIT",
     "copyright": [
       [
@@ -47,7 +47,7 @@
         71483597
       ]
     ],
-    "license_issue": 30
+    "license_issue": 57
   },
   "打開核心原始碼": {
     "name": "打開核心原始碼",
