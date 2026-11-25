@@ -1,10 +1,12 @@
-// 模組導覽列（D153）：頁面載入後由 ui/web.py（或「互通」的 popup.py）注入。用法：(這個檔)(格子的清單)。
+// 模組導覽列（D153）：頁面載入後由「頁面」模組注入（角色 page.top）。用法：(這個檔)(格子的清單)。
 // 格子是 {k: "panel" | "parent" | "child", t: 字, i: 圖示的字, d: 滑鼠停著的說明}。
-// 「互通」自己帶一份 nav.js，跟這一份一字不差（tests/test_nav.py）。所有字都用 textContent 放，名稱裡有 < 也只是字。
+// 所有字都用 textContent 放，名稱裡有 < 也只是字。
 (cells) => {
   if (!cells.length || !document.body || document.querySelector("iplot-nav") || document.querySelector('meta[name="iplot-nav"][content="off"]')) return;
   const bar = document.createElement("iplot-nav");
   bar.style.cssText = "all: initial; display: block; flex: none; position: sticky; top: 0; z-index: 2147483647";
+  const box = window.getComputedStyle ? window.getComputedStyle(document.body).display : "";
+  if (/flex|grid/.test(box)) bar.style.cssText += "; position: fixed; left: 0; right: 0";  // body 把內容置中（車車）：貼在視窗頂端，不跟著置中
   const root = bar.attachShadow({mode: "closed"});
   const style = document.createElement("style");
   style.textContent = `
