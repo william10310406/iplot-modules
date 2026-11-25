@@ -201,10 +201,10 @@
     "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
-    "version": "0.2.2",
-    "notes": "面板上的「回報與討論」這一格改在另開的視窗裡開（要「互通」0.4.0）：開著的時候回到面板按別的模組會馬上跑。錯誤旁邊的「回報這個問題」照舊在面板裡開。",
-    "issue": 40,
-    "updated": "2026-11-19",
+    "version": "0.4.1",
+    "notes": "iPLoT 1.0 的核心搬進 `modules/核心/`（D167）：回報裡核心的檔一樣寫成 `<IPLOT>/core/…`、原始碼留著；標題寫「iPLoT 核心」，不跟「核心」這個模組混在一起。",
+    "issue": 56,
+    "updated": "2026-11-25",
     "license": "MIT",
     "copyright": [
       [
@@ -213,7 +213,7 @@
         71483597
       ]
     ],
-    "license_issue": 40
+    "license_issue": 56
   },
   "課程作業": {
     "name": "課程作業",

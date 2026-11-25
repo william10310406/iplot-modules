@@ -146,6 +146,19 @@ class Ctx:
     module: str | None = None       # 出錯模組的「最上層」模組資料夾（report.module_of 算的）
     module_name: str | None = None  # 那個資料夾的名稱
     secrets: tuple[str, ...] = ()   # 一定要藏的字（中間那幾層下一層模組的名字）
+    kernels: tuple[str, ...] = ()   # iPLoT 的核心所在的資料夾（1.0 起在 modules/ 裡，D167）：它的 core/、ui/ 當成 <IPLOT>/core/…
+
+
+def kernels(iplot: Path) -> tuple[str, ...]:
+    """iPLoT 的核心在哪幾個資料夾：iPLoT 資料夾本身（種子），與 modules/ 底下長得像核心的（有 core/ 與 ui/start.py，
+    D167），連同它們的 .local/ 裡的備份。只看長相、不看名字（規則 2）。"""
+    found = [iplot]
+    with contextlib.suppress(OSError):
+        for top in sorted((iplot / "modules").iterdir()):
+            for folder in [top, *(sorted((top / ".local").glob("*")) if (top / ".local").is_dir() else [])]:
+                if (folder / "core").is_dir() and (folder / "ui" / "start.py").is_file():
+                    found.append(folder)
+    return tuple(str(f) for f in found)
 
 
 def context(iplot, module=None, secrets=()) -> Ctx:
@@ -166,8 +179,9 @@ def context(iplot, module=None, secrets=()) -> Ctx:
     prefixes = (sys.prefix, sys.base_prefix, sys.exec_prefix)
     pythons = tuple(dict.fromkeys([*prefixes, *map(os.path.realpath, prefixes)]))
     folder = None if module is None else str(Path(module).resolve())
-    return Ctx(home, tuple(users), str(Path(iplot).resolve()), pythons, folder,
-               None if folder is None else Path(folder).name, tuple(secrets))
+    root = Path(iplot).resolve()
+    return Ctx(home, tuple(users), str(root), pythons, folder,
+               None if folder is None else Path(folder).name, tuple(secrets), kernels(root))
 
 
 def _below(n: str, base: str | None) -> str | None:
@@ -204,6 +218,10 @@ def path_label(p: str, ctx: Ctx) -> str:
     rel = _below(n, ctx.iplot)
     if rel and (rel.lower().startswith(("core/", "ui/", "lib/")) or rel.lower() in ("main.py", "config.py")):
         return "<IPLOT>/" + rel
+    for kernel in sorted(ctx.kernels, key=len, reverse=True):  # 核心在 modules/ 裡（D167）：一樣是 iPLoT 自己的
+        rel = _below(n, kernel)
+        if rel and kernel != ctx.iplot and rel.lower().startswith(("core/", "ui/")):
+            return "<IPLOT>/" + rel
     # Python 的只認 prefix 底下的 lib/、lib64/（Windows 的 Lib/）：Linux 的 prefix 是 /usr，/usr/local/… 是使用者的。
     # prefix 是家目錄，或在 iPLoT、出錯的模組、家目錄的上面的（--prefix=$HOME 這種），整個不算
     mine = [SEP.sub("/", d) for d in (ctx.iplot, ctx.module, ctx.home) if d]

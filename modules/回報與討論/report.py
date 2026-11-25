@@ -1,6 +1,5 @@
 """回報的內容：環境（iPLoT、作業系統、Python、出錯的模組與版本）與內文（D112）；預填的網址、截斷、存全文（D113）。
-遮蔽一律交給 redact.redact，這裡不自己認路徑。core 只在函式裡 import（module_of、from_error）：直接執行
-（IPLOT_DIRECT=1）時 core 不在 sys.path 上。寫檔的只有 save。"""
+遮蔽一律交給 redact.redact，這裡不自己認路徑。只透過 app 碰 iPLoT（1.0 起不 import core，D164）。寫檔的只有 save。"""
 
 import contextlib
 import os
@@ -15,7 +14,7 @@ from pathlib import Path
 import forum
 import redact
 
-REPORTER = "0.2.2"  # 內文最後那一行的 HTML 註解帶的版本：跟 CHANGELOG.md 最上面那一節一樣（測試核）
+REPORTER = "0.4.1"  # 內文最後那一行的 HTML 註解帶的版本：跟 CHANGELOG.md 最上面那一節一樣（測試核）
 WHAT_HEAD = "### 發生了什麼"
 WHAT_ERROR = "（請寫一兩句：按了什麼、預期是什麼）"
 WHAT_BLANK = "（請寫：按了什麼、看到什麼、預期是什麼）"
@@ -53,11 +52,31 @@ class Report:
     ctx: redact.Ctx   # 按送出時再遮一次要用同一個
 
 
-def panel_kind(modules=sys.modules) -> str:
-    """後備的 tkinter 面板裡 ui.web 也在（網頁面板開不起來才退到它）：先看 ui.tk（設計第 17 節第 7 條）。"""
-    if "ui.tk" in modules:
-        return "tkinter"
-    return "網頁" if "ui.web" in modules else "面板外"
+@dataclass(frozen=True)
+class Error:
+    """logs/last-error.json 讀回來的那一筆錯誤：欄位跟面板交來的錯誤一樣（kind、message、file、line、traceback_text、
+    source、module），app.describe 收得下。自己定義，不 import 核心的型別（D164）。"""
+    kind: str
+    message: str
+    file: Path | None
+    line: int | None
+    traceback_text: str
+    source: str
+    module: str | None
+
+
+def panel_kind(app) -> str:
+    """開這個模組的面板是哪一種：問 app.panel（「網頁」「tkinter」）；不是從面板開的寫「面板外」。不猜（R3，D164）。"""
+    return getattr(app, "panel", None) or "面板外"
+
+
+def is_module(folder: Path) -> bool:
+    """folder 是資料夾（不是符號連結），裡面有檔名剛好是 iplot.py 的檔案；讀不到就不是。
+    抄自 iPLoT 核心的 core/scan.py 的 is_module（規則 7：寧可抄一份也不依賴核心的內部）。"""
+    with contextlib.suppress(OSError):  # APFS 不分大小寫，所以比對 listdir 的實際檔名，iPLoT.py 不算
+        return (not folder.is_symlink() and folder.is_dir()
+                and "iplot.py" in os.listdir(folder) and (folder / "iplot.py").is_file())
+    return False
 
 
 def python_source(base: str) -> str:
@@ -107,10 +126,8 @@ def _nfc(name: str) -> str:
 def module_of(error) -> tuple[Path | None, tuple[str, ...]]:
     """出錯的模組的最上層模組資料夾，與中間那幾層下一層模組的名字（要藏的；從出錯的那一層往上）。
     從 error.file 往上找第一個是模組、名字是 error.module 的資料夾，再往上到上一層不是模組為止
-    （設計第 17 節第 8 條）。「是模組」用核心的 is_module：符號連結不算、iPLoT.py 不算。
+    （設計第 17 節第 8 條）。「是模組」跟核心一樣（is_module）：符號連結不算、iPLoT.py 不算。
     核心與設定的錯誤、找不到那個資料夾的，回 (None, ())。"""
-    from core.scan import is_module
-
     if error.file is None or error.module is None:
         return None, ()
     want = _nfc(error.module)
@@ -146,7 +163,7 @@ def environment(app, top: Path | None, hidden: bool, source: str | None) -> list
     """「環境」那一節，一行一個。source 是 error.source；沒有錯誤的回報傳 None，沒有模組那一行
     （top 有值的話照樣寫）。"""
     python = f"{platform.python_version()}（{python_source(os.path.realpath(sys.base_prefix))}）"
-    lines = [f"- iPLoT：{app.version}（面板：{panel_kind()}）", f"- 作業系統：{this_os()}", f"- Python：{python}"]
+    lines = [f"- iPLoT：{app.version}（面板：{panel_kind(app)}）", f"- 作業系統：{this_os()}", f"- Python：{python}"]
     if top is not None:
         note = "（出錯的是它的下一層模組，名稱已遮蔽）" if hidden else ""
         lines.append(f"- 模組：{top.name} {module_version(top)}{note}")
@@ -201,8 +218,6 @@ def from_error(error, app, log=()) -> Report:
     """「回報這個問題」：一筆 ErrorInfo 變成遮過的回報。下一層模組的名字藏起來，標題用最上層模組的名字。
     出錯的模組找不到它的資料夾時，名字一律寫 <模組>：error.module 可能是學生的名字，也不放進 secrets
     （redact 的第 7 步不分大小寫、沒有字界，叫 A 的模組會把整段 traceback 換爛）。"""
-    from core.errors import describe
-
     top, hidden = module_of(error)
     ctx = redact.context(app.home, top, hidden)
     lost = top is None and error.source == "module"
@@ -211,8 +226,8 @@ def from_error(error, app, log=()) -> Report:
     elif lost:
         name = LOST
     else:
-        name = {"core": "核心", "config": "config.py"}.get(error.source, "iPLoT")
-    sentence = describe(replace(error, module=LOST) if lost else error)
+        name = {"core": "iPLoT 核心", "config": "config.py"}.get(error.source, "iPLoT")
+    sentence = app.describe(replace(error, module=LOST) if lost else error)
     text = body(WHAT_ERROR, environment(app, top, bool(hidden), error.source), sentence, error.traceback_text, log)
     return _masked("BUG", f"[回報] {name}：{error.kind}（iPLoT {app.version}）", text, ctx)
 
@@ -231,8 +246,6 @@ def last_error(home: Path) -> tuple | None:
     格式不對（舊版 iPLoT 沒有這個檔、檔被改壞了）都回 None：只附環境資訊。"""
     import json
 
-    from core.types import ErrorInfo
-
     try:
         data = json.loads((home / LAST_ERROR).read_text(encoding="utf-8", errors="surrogateescape"))
         kind, message, tb = data["kind"], data["message"], data["traceback_text"]
@@ -245,7 +258,7 @@ def last_error(home: Path) -> tuple | None:
             and isinstance(recent, list) and all(isinstance(r, str) for r in recent))
     if not good:
         return None
-    return ErrorInfo(kind, message, None if file is None else Path(file), line, tb, source, module), recent, when
+    return Error(kind, message, None if file is None else Path(file), line, tb, source, module), recent, when
 
 
 def recent_for(home: Path, error) -> list[str]:

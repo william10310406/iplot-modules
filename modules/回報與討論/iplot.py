@@ -1,28 +1,26 @@
 """回報問題、提建議、看大家在討論什麼。"""
-# ── 互通 ── 直接執行這個檔（python3 iplot.py）時交給 iPLoT 用彈出式視窗跑；從 iPLoT 裡執行時這段不做事。不要可以整段刪掉
+# ── iPLoT ── 直接執行這個檔（python3 iplot.py）時交給 iPLoT 跑（python3 main.py --run）；從 iPLoT 裡執行時這段不做事。不要可以整段刪掉
 import sys
 
 if __name__ == "__main__" and "core.runner" not in sys.modules:
     import os
     import subprocess
     here = folder = os.path.dirname(os.path.abspath(__file__))
-    run = None
-    while run is None and folder != os.path.dirname(folder):  # 往上一層層找 iPLoT：模組在它裡面或旁邊都找得到
+    main = None
+    while main is None and folder != os.path.dirname(folder):  # 往上一層層找 iPLoT：模組在它裡面或旁邊都找得到
         folder = os.path.dirname(folder)
         try:
             names = [""] + sorted(os.listdir(folder))
         except OSError:
             names = [""]
-        runs = (os.path.join(folder, n, "modules", "互通", "run.py") for n in names)
-        run = next((r for r in runs if os.path.isfile(r)), None)
-    if run and not os.environ.get("IPLOT_DIRECT"):  # IPLOT_DIRECT=1：不交出去，照一般腳本跑（例如在編輯器裡除錯）
-        sys.exit(subprocess.call([sys.executable, run, here, *sys.argv[1:]]))
-    if not run:
-        print("找不到 iPLoT 的「互通」（先在工作坊裝「互通」；模組要放在 iPLoT 資料夾裡或它旁邊），照一般的 python3 iplot.py 跑",
-              file=sys.stderr)
-# ── 互通 ──
+        mains = (os.path.join(folder, n, "main.py") for n in names)
+        main = next((m for m in mains if os.path.isfile(m) and os.path.isdir(os.path.join(os.path.dirname(m), "core"))), None)
+    if main and not os.environ.get("IPLOT_DIRECT"):  # IPLOT_DIRECT=1：不交出去，照一般腳本跑（例如在編輯器裡除錯）
+        sys.exit(subprocess.call([sys.executable, main, "--run", here, *sys.argv[1:]]))
+    if not main:
+        print("找不到 iPLoT（模組要放在 iPLoT 資料夾裡或它旁邊），照一般的 python3 iplot.py 跑", file=sys.stderr)
+# ── iPLoT ──
 
-import importlib.util
 import json
 import threading
 import time
@@ -30,10 +28,13 @@ import webbrowser
 from pathlib import Path
 
 import forum
+import lasterror
 import redact
 import report
 
 ICON = "💬"
+PROVIDES = {"panel.error": "on_panel_error"}  # 面板上的錯誤交給這裡（D110、D150、D162）
+MIN_API = 7  # app.panel、app.describe（D164）；每按一次在自己的程序裡跑，頁面開著不卡面板（D161）
 HERE = Path(__file__).resolve().parent
 OUTBOX = HERE / "回報"  # 完整的回報（.txt）與 tkinter 面板的草稿（.md）：只放在這台電腦，不進 git、不進包
 BROWSER_FAILS = (webbrowser.Error, OSError, ValueError)  # 找不到瀏覽器、Windows 的 ShellExecute、3.14 對 - 開頭的網址
@@ -216,10 +217,8 @@ class Api:
 def run(app):
     """面板上的「回報與討論」這一格（D114，設計第 5、9 節）：回報問題、提建議、問問題、看論壇。回報問題可以指定一個
     最上層的模組（下一層模組的名字可能是學生的名字，不列）；每一份都在這裡先算好，頁面那一頭只查表、不碰 app。"""
-    if report.panel_kind() == "tkinter":
+    if report.panel_kind(app) == "tkinter":
         return _menu_by_ask(app)
-    if not _separate(app):  # 在另開的程序裡開這一頁，面板空出來；「回報這個問題」（on_error）拿的是面板上的錯誤，留在面板裡
-        return
     env = report.short_env(app)
     names = list(dict.fromkeys(m.name for m in app.modules if m.level != "child"))  # 不同的根底下同名的只列一次
     saved = []
@@ -241,11 +240,22 @@ def _latest(app) -> tuple[report.Report, str]:
     return rep, LAST.format(when=last[2] or "時間不明", title=rep.title)
 
 
-def on_error(app, error):
+def on_panel_error(app, error, recent, pressed):
+    """角色 panel.error：面板上出了錯。pressed 是使用者按了那一列的「回報這個問題」，就開回報；沒按的話記成
+    「最近一次的錯誤」（logs/last-error.json），回 True 表示值得問「要回報嗎？」（面板自己節流）。"""
+    if pressed:
+        return on_error(app, error, recent)
+    if not lasterror.worth_reporting(error, app.module.name):
+        return False
+    lasterror.write(app.home, error, "\n".join(line for line in recent[-1:]), recent)
+    return True
+
+
+def on_error(app, error, recent=None):
     """面板上的「回報這個問題」（D110）：遮過的回報給人看、讓人改，再用預填的網址開瀏覽器（設計第 5.1、5.2 節）。
     頁面那一頭不碰 app：存了要指給人看的檔，等頁面關掉、回到這裡才 reveal。"""
-    rep = report.from_error(error, app, report.recent_for(app.home, error))
-    if report.panel_kind() == "tkinter":
+    rep = report.from_error(error, app, report.recent_for(app.home, error) if recent is None else recent)
+    if report.panel_kind(app) == "tkinter":
         return _by_file(app, rep, error.kind)
     saved = []
     data = {"mode": "edit", "title": rep.title, "body": rep.body, "notice": rep.notice, "hint": report.HINT}
@@ -383,15 +393,3 @@ def _copy_tk(text: str) -> bool:
     except Exception:  # noqa: BLE001  複製不成不能讓整個回報停下來
         return False
     return True
-
-
-def _separate(app) -> bool:
-    """有「互通」的 separate.py（互通 0.4.0 起）就經它另開一個程序開這一頁，面板不會被卡住；回 False 表示已經另開
-    或叫到最前面了，這裡不用開。沒有就照舊在這裡開。用檔案路徑載入：這個模組的 sys.path[0] 是自己的資料夾。"""
-    path = Path(app.home) / "modules" / "互通" / "separate.py"
-    if not path.is_file():
-        return True
-    spec = importlib.util.spec_from_file_location("iplot_interop_separate", path)
-    separate = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(separate)
-    return separate.here(app)
