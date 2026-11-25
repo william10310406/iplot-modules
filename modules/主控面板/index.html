@@ -1,0 +1,44 @@
+<!doctype html>
+<!-- iPLoT 面板的骨架。外觀在 style.css，行為在 app.js；畫面上的字全部由 Python 送進來（modules/主控面板/panel_text.py）。
+     custom.css 放在 iPLoT 資料夾（跟 config.py 同一層），不存在也沒關係；更新不會動它。 -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>iPLoT</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../custom.css">
+</head>
+<body>
+
+<!-- 麵包屑：iPLoT ▸ 模組 ▸ 子模組 -->
+<nav class="crumbs" id="crumbs"></nav>
+
+<!-- 一組組圖示，可捲動 -->
+<main class="area" id="area"></main>
+
+<!-- 狀態列（選到的模組與它的說明）和訊息區 -->
+<footer class="drawer" id="drawer">
+  <div class="status" id="status"></div>
+  <div class="log" id="log"></div>
+</footer>
+
+<!-- 右鍵選單 -->
+<div class="menu" id="menu" hidden></div>
+
+<!-- 對話框：問名字、模組的 input()、確定／取消 -->
+<div class="scrim" id="scrim" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <h2 id="dlgTitle"></h2>
+    <input id="dlgInput" type="text" autocomplete="off" spellcheck="false">
+    <div class="hint" id="dlgHint"></div>
+    <label class="check" id="dlgMuteRow" hidden><input id="dlgMute" type="checkbox"><span id="dlgMuteText"></span></label>
+    <div class="row">
+      <button class="btn" id="dlgCancel" type="button"></button>
+      <button class="btn primary" id="dlgOk" type="button"></button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

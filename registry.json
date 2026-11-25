@@ -118,10 +118,10 @@
     "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
-    "version": "0.1.3",
-    "notes": "在面板外按「主控面板」另開面板時，會確認面板真的起來了；一開就結束了會說「打不開主控面板：它一開就結束了」，原因記在 iPLoT 資料夾的 logs/separate.log。以前只說「打開主控面板」。",
-    "issue": 45,
-    "updated": "2026-11-23",
+    "version": "0.3.0",
+    "notes": "不再猜自己在哪個面板、也不再自己抄一份「叫到最前面」：問 iPLoT 1.0 的 `app.panel`，叫面板到最前面交給作業系統模組的 `os.activate`（D164）。要 iPLoT 1.0 以上。",
+    "issue": 52,
+    "updated": "2026-11-25",
     "license": "MIT",
     "copyright": [
       [
@@ -130,7 +130,7 @@
         71483597
       ]
     ],
-    "license_issue": 45
+    "license_issue": 52
   },
   "行事曆": {
     "name": "行事曆",

@@ -1,0 +1,158 @@
+/* iPLoT 面板的外觀。
+   要改顏色、大小：只改最上面這一段變數，下面的規則都只用變數。
+   想讓自己的改法不被更新蓋掉：在 iPLoT 資料夾（跟 config.py 同一層）建一個 custom.css，
+   把要改的變數寫在裡面，例如  :root { --accent: #e0703d; --icon: 64px; }
+   它在這個檔之後載入，同名的變數以它為準。 */
+
+:root {
+  color-scheme: light dark;
+
+  /* 顏色（淺色模式） */
+  --bg: #eef0f4;             /* 麵包屑以外的底：訊息區、狀態列 */
+  --surface: #ffffff;        /* 圖示區、對話框 */
+  --fg: #1c1d21;             /* 文字 */
+  --muted: #6b7080;          /* 次要的文字：路徑、說明 */
+  --line: #dfe2e9;           /* 分隔線、邊框 */
+  --accent: #3d6ee0;         /* 選取、主要按鈕 */
+  --accent-soft: rgba(61, 110, 224, .14);
+  --on-accent: #ffffff;      /* 壓在 accent 與圖示底色上面的字 */
+  --danger: #d9463e;         /* 錯誤：紅點、錯誤訊息 */
+  --hover: rgba(28, 29, 33, .06);
+  --menu: rgba(255, 255, 255, .88);
+  --scrim: rgba(20, 24, 40, .28);
+  --shadow: 0 18px 50px rgba(20, 24, 40, .18);
+  --menu-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+  --icon-shine: inset 0 1px 0 rgba(255, 255, 255, .38), 0 1px 2px rgba(0, 0, 0, .16);
+
+  /* 每一組標題前面的顏色點：這一層、上一層、config.py 加的、下一層 */
+  --here: #3d6ee0; --parent: #d9463e; --extra: #2e9e5b; --child: #8a63d2;
+
+  /* 圖示的底色：色相由模組名稱算出來（app.js 的 hue），這裡定飽和度與上下兩端的亮度 */
+  --icon-saturation: 66%;
+  --icon-top: 66%;
+  --icon-bottom: 50%;
+
+  /* 尺寸 */
+  --tile: 96px;              /* 一格最窄多寬；視窗拉寬時自動多排幾格 */
+  --icon: 56px;              /* 圖示的邊長 */
+  --icon-radius: 16px;
+  --radius: 12px;
+  --log-height: 126px;       /* 訊息區的高度 */
+  --font: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* 深色模式：跟著系統 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181c; --surface: #242529; --fg: #ebecf0; --muted: #9a9fae; --line: #34363f;
+    --accent: #7398f4; --accent-soft: rgba(115, 152, 244, .2); --danger: #f0736b;
+    --hover: rgba(235, 236, 240, .07); --menu: rgba(40, 41, 47, .9); --scrim: rgba(0, 0, 0, .45);
+    --shadow: 0 18px 50px rgba(0, 0, 0, .5); --menu-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+    --icon-top: 58%; --icon-bottom: 42%;
+  }
+}
+
+/* ── 整個視窗：上到下是 麵包屑、圖示區（可捲動）、狀態列與訊息區 ── */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { display: flex; flex-direction: column; overflow: hidden; background: var(--surface); color: var(--fg);
+  font: 14px/1.5 var(--font); cursor: default; }
+button { font: inherit; color: inherit; cursor: default; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── 麵包屑 ── */
+.crumbs { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-height: 40px;
+  padding: 7px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.crumbs button { background: none; border: 0; padding: 4px 8px; border-radius: 6px; }
+.crumbs button:hover { background: var(--hover); }
+.crumbs .here { font-weight: 600; }
+.crumbs .sep { color: var(--muted); padding: 0 2px; }
+
+/* ── 圖示區：一組一組 ── */
+.area { flex: 1; min-height: 0; overflow: auto; padding: 4px 12px 14px; }
+.group + .group { margin-top: 12px; }
+.ghead { display: flex; align-items: baseline; gap: 8px; padding: 12px 8px 6px; }
+.ghead .dot { flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; }
+.dot.here { background: var(--here); }
+.dot.parent { background: var(--parent); }
+.dot.extra { background: var(--extra); }
+.dot.child { background: var(--child); }
+.ghead .name { font-size: 13px; font-weight: 600; }
+.ghead .path { min-width: 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.empty { padding: 2px 8px 6px; font-size: 13px; color: var(--muted); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tile), 1fr)); gap: 4px; }
+
+/* ── 一格：圖示、名稱（最多兩行）、右上角紅點、右下角 ▸ ── */
+.tile { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; padding: 10px 6px 8px;
+  border-radius: var(--radius); }
+.tile:hover { background: var(--hover); }
+.tile.selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.iconwrap { position: relative; flex: none; width: var(--icon); height: var(--icon); }
+.icon { display: grid; place-items: center; width: var(--icon); height: var(--icon); border-radius: var(--icon-radius);
+  font-size: calc(var(--icon) * .54); line-height: 1; font-weight: 600; color: var(--on-accent);
+  background: linear-gradient(180deg,
+    hsl(var(--h) var(--icon-saturation) var(--icon-top)), hsl(var(--h) var(--icon-saturation) var(--icon-bottom)));
+  box-shadow: var(--icon-shine); }
+.icon.letter { font-size: calc(var(--icon) * .43); }
+img.icon { object-fit: cover; background: none; }
+.icon.add { background: none; box-shadow: none; border: 2px dashed var(--line); color: var(--muted); font-weight: 400; }
+.tile:hover .icon.add { border-color: var(--muted); color: var(--fg); }
+.badge { position: absolute; display: grid; place-items: center; width: 19px; height: 19px; padding: 0;
+  border-radius: 50%; font-size: 11px; line-height: 1; }
+.badge.warn { right: -7px; top: -5px; background: var(--danger); color: var(--on-accent); font-weight: 700; }
+.badge.kids { right: -7px; bottom: -5px; background: var(--surface); border: 1px solid var(--line); }
+.badge.kids:hover { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.label { max-width: 100%; overflow: hidden; font-size: 12.5px; line-height: 1.3; text-align: center;
+  overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* ── 狀態列與訊息區 ── */
+.drawer { flex: none; border-top: 1px solid var(--line); background: var(--bg); }
+.status { display: flex; align-items: baseline; gap: 8px; min-width: 0; min-height: 36px; padding: 8px 14px;
+  border-bottom: 1px solid var(--line); font-size: 13px; }
+.status b { flex: none; font-weight: 600; }
+.status span { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.status .bad { color: var(--danger); }
+.status .busy { flex: none; margin-left: auto; color: var(--accent); }
+.log { display: flex; flex-direction: column; gap: 2px; height: var(--log-height); overflow: auto;
+  padding: 6px 14px 10px; font-size: 13px; cursor: auto; -webkit-user-select: text; user-select: text; }
+.entry { display: flex; align-items: flex-start; gap: 8px; padding: 3px 0; }
+.entry .m { flex: none; width: 6px; height: 6px; margin-top: 7px; border-radius: 50%; background: var(--muted); }
+.entry.err .m { background: var(--danger); }
+.entry .t { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.entry .acts { flex: none; display: flex; gap: 6px; }
+.btn-s { padding: 2px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface);
+  font-size: 12px; -webkit-user-select: none; user-select: none; }
+.btn-s:hover { background: var(--hover); }
+.tb { margin: 6px 0 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--muted); font: 11.5px/1.45 var(--mono); white-space: pre-wrap;
+  overflow-wrap: anywhere; }
+
+/* ── 右鍵選單 ── */
+.menu { position: fixed; z-index: 20; min-width: 208px; padding: 5px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--menu); box-shadow: var(--menu-shadow); font-size: 13px;
+  -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); }
+.menu button { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: 6px; background: none;
+  text-align: left; }
+.menu button:hover { background: var(--accent); color: var(--on-accent); }
+.menu hr { margin: 4px 8px; border: 0; border-top: 1px solid var(--line); }
+
+/* ── 對話框 ── */
+.scrim { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px;
+  background: var(--scrim); }
+.dialog { width: min(380px, 100%); padding: 18px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--surface); box-shadow: var(--shadow); }
+.dialog h2 { max-height: 40vh; margin: 0 0 10px; overflow: auto; font-size: 14px; font-weight: 600;
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+.dialog input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--fg); font: inherit; }
+.dialog input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.dialog .hint { min-height: 18px; margin-top: 6px; font-size: 12px; color: var(--danger); }
+.dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.dialog .check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.dialog .check input { width: auto; }
+.btn { padding: 6px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  font-size: 13px; }
+.btn:hover { background: var(--hover); }
+.btn.primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
