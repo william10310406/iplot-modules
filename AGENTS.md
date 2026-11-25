@@ -83,11 +83,11 @@ import requests                  # 沒有退路、也沒宣告
 
 **7. 要別的模組的小工具，寧可抄一份也不要依賴它；抄的時候註明出處。**（人工；在 iPLoT 的 repo 裡由 `tests/test_copies.py` 擋：沒登記的抄本會紅）
 
-**8. 用到 `app` 在 `api_version` 4 以後才有的東西（`app.call`、`app.each`、`app.providers` 是 5），要嘛先 `hasattr(app, "call")` 判斷，要嘛頂層宣告 `MIN_API = 5`。**（人工）
+**8. 用到 `app` 在 `api_version` 4 以後才有的東西（`app.call`、`app.each`、`app.providers` 是 5，`app.start` 是 6），要嘛先 `hasattr(app, "call")` 判斷，要嘛頂層宣告 `MIN_API = 5`（iPLoT 1.0 起不夠新就不跑、會請使用者更新）。**（人工）
 使用者的 iPLoT 不一定是最新版。
 
 **9. 每台電腦自己的東西（設定、快取、`.pid`、登入資訊）不准放進上傳的包。**（工作坊收件時退回）
-現在的做法：寫在模組資料夾的點檔或 `設定.json`，並在 `.gitignore` 加一行。0.9 起統一放 `.local/`。
+現在的做法：寫在模組資料夾的點檔或 `設定.json`，並在 `.gitignore` 加一行。1.0 起統一放 `.local/`。
 
 **10. 畫面上的文字寫給一般人看：中文、完整句子、說出下一步怎麼辦。錯誤要說清楚發生什麼、使用者可以做什麼。**（人工）
 

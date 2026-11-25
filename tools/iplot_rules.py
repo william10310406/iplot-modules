@@ -3,7 +3,7 @@
 抄自 iPLoT d5b149b（核心 0.5.1；分支 m7-upload）：
 - core/create.py：FORBIDDEN_CHARS、RESERVED、_bad_name（這裡叫 bad_name）
 - core/text.py：T["bad_name"]（這裡叫 BAD_NAME_TEXT）、T["syntax_error"]（這裡叫 SYNTAX_ERROR）
-- core/types.py：Meta（iPLoT 0.8 加了 provides，D159）
+- core/types.py：Meta（iPLoT 0.8 加了 provides，D159；1.0 加了 min_api、role_names，D161、D166）
 - core/meta.py：read_meta、_assigns、_str（T["syntax_error"] 換成 SYNTAX_ERROR）
 - tools/publish.py：changelog_notes、latest、_url（這裡叫 url）
 - modules/工作坊/workshop.py：SKIP、NEEDED、_newer（這裡叫 newer）、read_listing（照 M7 工作單的約定：iPLoT 那邊讀網址，
@@ -56,11 +56,14 @@ class Meta:
     error: str | None
     icon: str | None = None
     provides: tuple[tuple[str, str], ...] = ()  # iPLoT 0.8 起（D159）：頂層 PROVIDES 的（角色, 函式名）
+    min_api: int = 0  # iPLoT 1.0 起（D161）：頂層 MIN_API，要的指令集版本
+    role_names: tuple[tuple[str, str], ...] = ()  # iPLoT 1.0 起（D166）：頂層 ROLE_NAMES 的（角色, 給人看的名字）
 
 
 # ---- core/meta.py ----
 def read_meta(file: Path) -> Meta:
-    """解析 file，取 docstring 第一段、TITLE、ICON、PROVIDES、有沒有 run 與 on_files；壞掉的檔案把錯誤放進 error。"""
+    """解析 file，取 docstring 第一段、TITLE、ICON、PROVIDES、ROLE_NAMES、MIN_API、有沒有 run 與 on_files；
+    壞掉的檔案把錯誤放進 error。"""
     try:
         tree = ast.parse(file.read_text(encoding="utf-8-sig"), str(file))
     except SyntaxError as exc:
@@ -69,20 +72,22 @@ def read_meta(file: Path) -> Meta:
         return Meta(None, "", False, False, SYNTAX_ERROR.format(line=exc.lineno, message=exc.msg))
     except (ValueError, OSError) as exc:  # 解碼失敗、3.10 的 NUL 位元組、讀不到
         return Meta(None, "", False, False, str(exc))
-    consts, funcs, provides = {}, set(), ()  # 頂層的 TITLE = "…"、ICON = "…"：只認字串常數
+    consts, funcs, pairs, min_api = {}, set(), {"PROVIDES": (), "ROLE_NAMES": ()}, 0  # 字串常數、字串對字串的字面值
     for node in tree.body:
         if isinstance(node, ast.FunctionDef):
             funcs.add(node.name)
-        elif _assigns(node, "PROVIDES") and isinstance(node.value, ast.Dict):  # 只認字串對字串的字面值（D159）
-            pairs = list(zip(node.value.keys, node.value.values, strict=True))
-            if all(_str(k) and _str(v) for k, v in pairs):
-                provides = tuple((k.value, v.value) for k, v in pairs)
+        elif any(_assigns(node, n) for n in pairs) and isinstance(node.value, ast.Dict):  # D159、D166
+            kv = list(zip(node.value.keys, node.value.values, strict=True))
+            if all(_str(k) and _str(v) for k, v in kv):
+                pairs[node.targets[0].id] = tuple((k.value, v.value) for k, v in kv)
+        elif _assigns(node, "MIN_API") and isinstance(node.value, ast.Constant) and type(node.value.value) is int:
+            min_api = node.value.value
         elif (_assigns(node, "TITLE") or _assigns(node, "ICON")) and _str(node.value):
             consts[node.targets[0].id] = node.value.value
     doc = ast.get_docstring(tree) or ""
     description = "\n".join(takewhile(str.strip, doc.splitlines()))
     return Meta(consts.get("TITLE"), description, "run" in funcs, "on_files" in funcs, None,
-                consts.get("ICON"), provides)
+                consts.get("ICON"), pairs["PROVIDES"], min_api, pairs["ROLE_NAMES"])
 
 
 def _assigns(node: ast.stmt, name: str) -> bool:
