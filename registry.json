@@ -78,7 +78,12 @@
         "Wei-Heng Chien (簡偉恆)",
         71483597
       ]
-    ]
+    ],
+    "version": "1.0.0",
+    "notes": "在 iPLoT 資料夾開一個終端機視窗（交給作業系統模組的 `os.terminal`）。這以前的版本沒有記錄；從 1.0 起補上，版本號跟著 iPLoT。",
+    "issue": 59,
+    "updated": "2026-11-25",
+    "license_issue": 59
   },
   "重新啟動": {
     "name": "重新啟動",
