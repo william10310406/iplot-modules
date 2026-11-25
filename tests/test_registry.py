@@ -314,6 +314,15 @@ def test_twenty_first_name_is_refused_but_updates_pass():
     assert limit_refusal(ME, False, 1, reg, {}, 0, NOW) is None
 
 
+def test_owner_has_no_per_account_limits():
+    from licensing import OWNER_RA_ID
+    received = received_of(MAX_PER_DAY * 3, NOW, uid=OWNER_RA_ID)
+    assert limit_refusal(OWNER_RA_ID, False, 1, REG, received, 0, NOW) is None
+    reg = {key(f"n{i}"): {"name": f"n{i}", "owner_id": OWNER_RA_ID, "owner": "ra"} for i in range(MAX_NAMES)}
+    assert limit_refusal(OWNER_RA_ID, True, 1, reg, received, 0, NOW) is None
+    assert limit_refusal(OWNER_RA_ID, True, 11, reg, received, MAX_MODULES - 10, NOW).key == "full"
+
+
 def test_space_limit_blocks_new_names_only():
     used = MAX_MODULES - 10
     assert limit_refusal(ME, True, 11, REG, {}, used, NOW).key == "full"

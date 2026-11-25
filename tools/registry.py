@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from iplot_rules import bad_name, latest, newer
+from licensing import OWNER_RA_ID
 from say import Refusal, clip, refuse
 
 MAX_NOTES = 1000
@@ -149,13 +150,14 @@ def _received_at(entry: dict) -> datetime:
 
 def limit_refusal(uploader_id: int, is_new: bool, upload_size: int, registry: dict, received: dict,
                   used: int, now: datetime) -> Refusal | None:
+    owner = uploader_id == OWNER_RA_ID  # 研究助理（repo 擁有者）不受每個帳號的份數、名字數限制；總空間照樣算
     since = now - timedelta(hours=24)
     recent = sum(1 for e in received.values() if e.get("owner_id") == uploader_id and _received_at(e) > since)
-    if recent >= MAX_PER_DAY:
+    if recent >= MAX_PER_DAY and not owner:
         return refuse("too_many_uploads", n=recent)
     if is_new:
         names = sum(1 for e in registry.values() if e.get("owner_id") == uploader_id)
-        if names >= MAX_NAMES:
+        if names >= MAX_NAMES and not owner:
             return refuse("too_many_names", n=names)
         if used + upload_size > MAX_MODULES:
             return refuse("full")
