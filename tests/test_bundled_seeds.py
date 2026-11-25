@@ -31,3 +31,35 @@ def test_every_module_tracked_in_iplot_next_door_is_reserved_or_seeded(iplot_nex
 
 def test_planned_bundled_modules_are_seeded_before_iplot_ships_them():
     assert not missing(set(PLANNED)), missing(set(PLANNED))
+
+
+def shipped(iplot):
+    """iPLoT 的核心的包帶的模組：git 追蹤的 modules/ 底下、沒有標 export-ignore 的（跟 iPLoT 的 tools/bundled_hashes.py 一樣）。"""
+    out = subprocess.run(["git", "-C", str(iplot), "ls-files", "-z", "--", "modules"],
+                         capture_output=True, check=True).stdout.decode("utf-8")
+    tops = sorted({p.split("/")[1] for p in out.split("\0") if p.count("/") >= 2})
+    attrs = subprocess.run(["git", "-C", str(iplot), "check-attr", "-z", "export-ignore", "--", *(f"modules/{n}/" for n in tops)],
+                           capture_output=True, check=True).stdout.decode("utf-8").split("\0")
+    ignored = {attrs[i].split("/")[1] for i in range(0, len(attrs) - 2, 3) if attrs[i + 2] == "set"}
+    return {unicodedata.normalize("NFC", n) for n in tops if n not in ignored}
+
+
+def test_bundled_flags_are_exactly_the_modules_iplot_ships(iplot_next_door):
+    """清單上標 bundled 的（D166：工作坊不給覆蓋）＝iPLoT 的包帶的、這裡有登記給研究助理的那幾個。保留的名字不發，不用標。"""
+    data = registry.read_json_strict(ROOT / "registry.json")
+    flagged = {v["name"] for v in data.values() if v.get("bundled") is True}
+    expected = {n for n in shipped(iplot_next_door) if data.get(registry.key(n), {}).get("owner_id") == RA_ID}
+    assert {registry.key(n) for n in flagged} == {registry.key(n) for n in expected}
+
+
+def test_the_listing_carries_the_bundled_flag(tmp_path):
+    import build
+
+    folder = tmp_path / "modules" / "甲"
+    folder.mkdir(parents=True)
+    (folder / "iplot.py").write_text('"""甲"""\ndef run(app):\n    pass\n', encoding="utf-8")
+    entry = {"name": "甲", "version": "1.0.0", "bundled": True, "license": "MIT"}
+    made = build.make_entry(entry, tmp_path, tmp_path / "site", "https://example.invalid/", None, {})
+    assert made["bundled"] is True
+    assert "bundled" not in build.make_entry({**entry, "bundled": False}, tmp_path, tmp_path / "site2",
+                                             "https://example.invalid/", None, {})

@@ -175,6 +175,8 @@ def make_entry(entry: dict, root: Path, out: Path, base_url: str, api, cache) ->
     }
     if warning is not None:
         result["warning"] = warning
+    if entry.get("bundled") is True:  # iPLoT 隨附的模組（D166）：工作坊 1.2 起在這台沒有 .origin 時當成隨附的，不給覆蓋
+        result["bundled"] = True
     return result
 
 

@@ -7,8 +7,13 @@
     "name": "更新",
     "reserved": true
   },
+  "核心": {
+    "name": "核心",
+    "reserved": true
+  },
   "工作坊": {
     "name": "工作坊",
+    "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
     "license": "MIT",
@@ -27,6 +32,7 @@
   },
   "開工": {
     "name": "開工",
+    "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
     "version": "0.5.2",
@@ -62,6 +68,7 @@
   },
   "開terminal": {
     "name": "開Terminal",
+    "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
     "license": "MIT",
@@ -75,6 +82,7 @@
   },
   "重新啟動": {
     "name": "重新啟動",
+    "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
     "license": "MIT",
@@ -88,6 +96,7 @@
   },
   "互通": {
     "name": "互通",
+    "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
     "version": "0.5.0",
@@ -106,6 +115,7 @@
   },
   "主控面板": {
     "name": "主控面板",
+    "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
     "version": "0.1.3",
@@ -124,6 +134,7 @@
   },
   "行事曆": {
     "name": "行事曆",
+    "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
     "version": "0.1.4",
@@ -187,6 +198,7 @@
   },
   "回報與討論": {
     "name": "回報與討論",
+    "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
     "version": "0.2.2",
@@ -265,6 +277,7 @@
   },
   "整理": {
     "name": "整理",
+    "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
     "license": "MIT",
@@ -283,6 +296,7 @@
   },
   "導覽列": {
     "name": "導覽列",
+    "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406",
     "license": "MIT",
@@ -301,6 +315,7 @@
   },
   "頁面": {
     "name": "頁面",
+    "bundled": true,
     "owner_id": 71483597,
     "owner": "william10310406"
   }

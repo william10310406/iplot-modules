@@ -20,13 +20,24 @@ from pathlib import Path
 import pytest
 
 IPLOT = Path(__file__).resolve().parents[2] / "iplot"
+
+
+def kernel() -> Path:
+    """隔壁 iPLoT 的核心在哪：1.0 起在 modules/核心/（D167），更早在最上層。"""
+    moved = IPLOT / "modules" / "核心"
+    return moved if (moved / "core").is_dir() else IPLOT
+
+
+def iplot_file(relpath: str) -> Path:
+    """iPLoT 的一個檔：core/、ui/ 底下的照 kernel() 找，其他（tools/、modules/）在 iPLoT 資料夾裡。"""
+    return (kernel() if relpath.split("/")[0] in ("core", "ui") else IPLOT) / relpath
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
 def iplot_next_door():
     """隔壁有 iPLoT 的 clone 就回它的路徑，沒有就 skip（對照的測試只在本機有兩個 repo 時跑）。"""
-    if not (IPLOT / "core" / "create.py").is_file():
+    if not iplot_file("core/create.py").is_file():
         pytest.skip("隔壁沒有 iPLoT 的 clone")
     return IPLOT
 
@@ -39,9 +50,9 @@ def load_iplot(relpath: str, name: str):
     modules_before = set(sys.modules)
     bytecode_before = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
-    sys.path.insert(0, str(IPLOT))
+    sys.path.insert(0, str(kernel()))
     try:
-        spec = importlib.util.spec_from_file_location(name, IPLOT / relpath)
+        spec = importlib.util.spec_from_file_location(name, iplot_file(relpath))
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module  # dataclass 要在 sys.modules 找得到自己的模組
         spec.loader.exec_module(module)
