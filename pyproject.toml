@@ -8,6 +8,11 @@ extend-exclude = ["tests/vendor", "modules/課程作業/範例課程", "modules/
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "BLE", "S102", "S307", "S602", "S605"]
 
+[tool.ruff.lint.per-file-ignores]
+# 模組是 iPLoT 那邊寫好、照 iPLoT 的 ruff 設定（行寬 100）檢查過才傳上來的；這裡行寬 120，SIM108 會把 iPLoT 嫌太長而不建議的 if/else
+# 改建議成一行三元式（例如導覽列 0.2.0）。模組不在這裡改（AGENTS.md），所以模組不套 SIM108
+"modules/**" = ["SIM108"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["tools", "tests"]
