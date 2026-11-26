@@ -30,10 +30,10 @@ SKIP = {".history", ".origin", ".unconfirmed", "__pycache__", ".ds_store"}
 NETWORK = (OSError, http.client.HTTPException)  # 連不上、逾時、連到一半斷掉、伺服器沒回話
 LABELS = {"absent": "未安裝", "installed": "已安裝", "update": "可更新", "modified": "已修改", "unknown": "版本未知",
           "bundled": "隨附模組"}
-BUTTONS = {"absent": "安裝", "update": "更新", "modified": "覆蓋", "unknown": "覆蓋"}  # 已安裝、隨附模組的沒有按鈕
+BUTTONS = {"absent": "安裝", "update": "換成新版", "modified": "覆蓋", "unknown": "覆蓋"}  # 已安裝、隨附模組的沒有按鈕
 # iPLoT 自己要用的隨附模組：工作坊不覆蓋（覆蓋之後帶著 .unconfirmed，右鍵動作每次先問、啟動時要安裝介面卻沒辦法回答）
 BUNDLED = ("作業系統", "更新", "工作坊")
-BUNDLED_NOTE = "這是 iPLoT 自己要用的隨附模組，工作坊不覆蓋它；要換新版，自己把新的資料夾複製進 modules/。"
+BUNDLED_NOTE = "這是跟著 iPLoT 一起來的隨附模組，工作坊不覆蓋它；按「更新」換成新版的 iPLoT 時，它會一起換成新版。"
 # 清單上標「維護者」的 GitHub 帳號（不分大小寫）：其他人上傳的模組沒有經過審查，按「安裝」前清單頁要先讓人看這一句
 MAINTAINERS = ("william10310406",)
 RISK_NOTE = "這是其他人寫的程式，沒有經過審查，能讀寫你電腦上的所有檔案。只安裝你信任的人做的模組。"
@@ -178,7 +178,8 @@ def _bundled(name, modules_dir):
 
 def state(entry, modules_dir):
     """索引裡這一筆，在這台電腦上是什麼狀態：
-    bundled iPLoT 自己要用的隨附模組（BUNDLED），工作坊不碰；absent 沒有這個資料夾；
+    bundled iPLoT 自己要用的隨附模組（BUNDLED），或清單標了 bundled、這裡沒有 .origin 的隨附模組，工作坊不碰；
+    absent 沒有這個資料夾；
     unknown 資料夾在但不是從工作坊裝的（沒有 .origin）；
     modified 當初裝進來的檔有被改過、刪掉（或 .origin 壞了）；update 沒改過、索引的版本比較新；
     installed 沒改過、已經是這一版。模組自己另外存的檔不算改過。"""
@@ -188,8 +189,8 @@ def state(entry, modules_dir):
     if not folder.exists():
         return "absent"
     origin = read_origin(folder)
-    if origin is None:
-        return "unknown"
+    if origin is None:  # 清單說它是跟著 iPLoT 一起來的（1.0 起，publish 標的）：不是「版本未知」，不給覆蓋
+        return "bundled" if entry.get("bundled") is True else "unknown"
     try:
         files = json.loads(origin.get("files", ""))
         same = isinstance(files, list) and origin["digest"] == digest(folder, [str(f) for f in files])
@@ -349,8 +350,8 @@ def install(entry, modules_dir, confirmed=False):
     name = entry["name"]
     if not isinstance(name, str) or not name.strip() or name.startswith(".") or set(name) & set("/\\"):
         raise ValueError("清單裡的模組名稱不是單純的資料夾名")
-    if _bundled(name, modules_dir):
-        raise ValueError(f"「{name}」是 iPLoT 自己要用的隨附模組，工作坊不覆蓋它")
+    if _bundled(name, modules_dir) or state(entry, modules_dir) == "bundled":
+        raise ValueError(f"「{name}」是跟著 iPLoT 一起來的隨附模組，工作坊不覆蓋它")
     folder, tmp = modules_dir / name, modules_dir / ".workshop-tmp"
     if folder.is_symlink():
         raise ValueError(f"「{name}」是一個符號連結，不裝進去")
